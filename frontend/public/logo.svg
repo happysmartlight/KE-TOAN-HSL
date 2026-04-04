@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="neonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00f5ff"/>
+      <stop offset="100%" style="stop-color:#bf00ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- LED bulb icon -->
+  <g filter="url(#glow)" transform="translate(8, 8)">
+    <!-- bulb body -->
+    <path d="M22 4 C14 4 8 10 8 18 C8 23 11 27 14 30 L14 36 L30 36 L30 30 C33 27 36 23 36 18 C36 10 30 4 22 4 Z"
+      fill="none" stroke="url(#neonGrad)" stroke-width="1.5"/>
+    <!-- bulb base -->
+    <rect x="15" y="36" width="14" height="3" rx="1" fill="url(#neonGrad)" opacity="0.8"/>
+    <rect x="16" y="39" width="12" height="3" rx="1" fill="url(#neonGrad)" opacity="0.6"/>
+    <!-- inner glow lines -->
+    <line x1="22" y1="12" x2="22" y2="28" stroke="#00f5ff" stroke-width="1" opacity="0.5"/>
+    <line x1="16" y1="17" x2="28" y2="23" stroke="#00f5ff" stroke-width="1" opacity="0.5"/>
+    <line x1="28" y1="17" x2="16" y2="23" stroke="#00f5ff" stroke-width="1" opacity="0.5"/>
+    <!-- center dot -->
+    <circle cx="22" cy="20" r="3" fill="#00f5ff" opacity="0.9"/>
+  </g>
+
+  <!-- Text -->
+  <text x="52" y="22" font-family="'Courier New', monospace" font-size="11" font-weight="700"
+    fill="url(#neonGrad)" filter="url(#glow)" letter-spacing="2">HAPPY SMART</text>
+  <text x="52" y="38" font-family="'Courier New', monospace" font-size="14" font-weight="700"
+    fill="#00f5ff" filter="url(#glow)" letter-spacing="3">LIGHT</text>
+
+  <!-- Neon underline -->
+  <line x1="52" y1="42" x2="188" y2="42" stroke="url(#neonGrad)" stroke-width="1" filter="url(#glow)" opacity="0.7"/>
+
+  <!-- Sub text -->
+  <text x="52" y="52" font-family="'Courier New', monospace" font-size="7"
+    fill="#00f5ff" opacity="0.6" letter-spacing="1">KẾ TOÁN NỘI BỘ v1.0</text>
+</svg>

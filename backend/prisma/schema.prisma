@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  name      String
+  role      String   @default("staff") // admin | staff
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deleteRequestsMade     DeleteRequest[] @relation("Requester")
+  deleteRequestsReviewed DeleteRequest[] @relation("Reviewer")
+}
+
+model Customer {
+  id          Int       @id @default(autoincrement())
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  companyName String?
+  taxCode     String?
+  debt        Float     @default(0)
+  status      String    @default("active") // active | deleted
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  invoices    Invoice[]
+  payments    Payment[]
+}
+
+model Supplier {
+  id        Int              @id @default(autoincrement())
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  debt      Float            @default(0)
+  status    String           @default("active") // active | deleted
+  deletedAt DateTime?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  purchases        PurchaseOrder[]
+  supplierPayments SupplierPayment[]
+}
+
+model Product {
+  id             Int              @id @default(autoincrement())
+  name           String
+  sku            String?          @unique
+  unit           String           @default("cái")
+  costPrice      Float            @default(0)
+  sellingPrice   Float            @default(0)
+  stock          Int              @default(0)
+  status         String           @default("active") // active | deleted
+  deletedAt      DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  invoiceItems   InvoiceItem[]
+  purchaseItems  PurchaseItem[]
+  inventoryLogs  InventoryLog[]
+}
+
+model Invoice {
+  id         Int           @id @default(autoincrement())
+  code       String        @unique // VD: INV-2024-001
+  customerId Int
+  customer   Customer      @relation(fields: [customerId], references: [id])
+  status     String        @default("unpaid") // unpaid | partial | paid
+  totalAmount Float        @default(0)
+  paidAmount  Float        @default(0)
+  note       String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  items      InvoiceItem[]
+  payments   Payment[]
+}
+
+model InvoiceItem {
+  id        Int     @id @default(autoincrement())
+  invoiceId Int
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  price     Float   // giá tại thời điểm bán
+  subtotal  Float
+}
+
+model Payment {
+  id         Int      @id @default(autoincrement())
+  invoiceId  Int
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id])
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+  amount     Float
+  method     String   @default("cash") // cash | transfer
+  note       String?
+  createdAt  DateTime @default(now())
+}
+
+model PurchaseOrder {
+  id          Int            @id @default(autoincrement())
+  code        String         @unique // VD: PO-2024-001
+  supplierId  Int
+  supplier    Supplier       @relation(fields: [supplierId], references: [id])
+  totalAmount Float          @default(0)
+  paidAmount  Float          @default(0)
+  status      String         @default("unpaid") // unpaid | partial | paid
+  note        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  items       PurchaseItem[]
+}
+
+model PurchaseItem {
+  id              Int           @id @default(autoincrement())
+  purchaseOrderId Int
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  productId       Int
+  product         Product       @relation(fields: [productId], references: [id])
+  quantity        Int
+  costPrice       Float
+  subtotal        Float
+}
+
+model Cashflow {
+  id          Int      @id @default(autoincrement())
+  type        String   // income | expense
+  category    String   // sales | payment_received | purchase | salary | other
+  amount      Float
+  description String?
+  refId       Int?     // ID tham chiếu (invoice, payment, purchase...)
+  refType     String?  // invoice | payment | purchase
+  createdAt   DateTime @default(now())
+}
+
+model SupplierPayment {
+  id         Int      @id @default(autoincrement())
+  supplierId Int
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+  amount     Float
+  method     String   @default("cash") // cash | transfer
+  note       String?
+  createdAt  DateTime @default(now())
+}
+
+model InventoryLog {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  type      String   // in | out
+  quantity  Int
+  reason    String   // purchase | sale | adjustment
+  refId     Int?
+  createdAt DateTime @default(now())
+}
+
+model DeleteRequest {
+  id          Int       @id @default(autoincrement())
+  requesterId Int
+  requester   User      @relation("Requester", fields: [requesterId], references: [id])
+  modelName   String    // Customer | Supplier | Product | Invoice
+  recordId    Int
+  recordLabel String    // tên hiển thị để admin nhận ra
+  reason      String
+  status      String    @default("pending") // pending | approved | rejected
+  reviewerId  Int?
+  reviewer    User?     @relation("Reviewer", fields: [reviewerId], references: [id])
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}

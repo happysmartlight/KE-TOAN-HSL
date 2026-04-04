@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin\",\"password\":\"admin123\"}')",
+      "Bash(python3 -c ':*)",
+      "Bash(npx prisma:*)",
+      "Bash(npm install:*)",
+      "Bash(taskkill //F //IM node.exe)"
+    ]
+  }
+}
