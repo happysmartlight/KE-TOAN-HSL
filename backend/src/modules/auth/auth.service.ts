@@ -1,23 +1,32 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../../utils/prisma';
+import { writeLog } from '../../utils/logger';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'ke-toan-noi-bo-secret-2024';
 const JWT_EXPIRES = '7d';
 
 export const authService = {
-  async login(username: string, password: string) {
+  async login(username: string, password: string, ip?: string) {
     const user = await prisma.user.findUnique({ where: { username } });
-    if (!user) throw new Error('Sai tên đăng nhập hoặc mật khẩu');
+    if (!user) {
+      await writeLog({ action: 'login', module: 'auth', message: `Đăng nhập thất bại: username "${username}" không tồn tại`, level: 'warning', ip });
+      throw new Error('Sai tên đăng nhập hoặc mật khẩu');
+    }
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) throw new Error('Sai tên đăng nhập hoặc mật khẩu');
+    if (!valid) {
+      await writeLog({ userId: user.id, username: user.username, action: 'login', module: 'auth', message: `Đăng nhập thất bại: sai mật khẩu`, level: 'warning', ip });
+      throw new Error('Sai tên đăng nhập hoặc mật khẩu');
+    }
 
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES }
     );
+
+    await writeLog({ userId: user.id, username: user.username, action: 'login', module: 'auth', message: `Đăng nhập thành công`, level: 'info', ip });
 
     return {
       token,

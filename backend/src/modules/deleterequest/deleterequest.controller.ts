@@ -19,7 +19,7 @@ export const deleteRequestController = {
 
   async create(req: Request, res: Response) {
     try {
-      const requesterId = (req as any).user.userId;
+      const requesterId = (req as any).user.id;  // JWT payload: { id, username, role }
       const result = await deleteRequestService.create(requesterId, req.body);
       res.status(201).json(result);
     } catch (err: any) { res.status(400).json({ error: err.message }); }
@@ -27,7 +27,7 @@ export const deleteRequestController = {
 
   async review(req: Request, res: Response) {
     try {
-      const reviewerId = (req as any).user.userId;
+      const reviewerId = (req as any).user.id;  // JWT payload: { id, username, role }
       const { action } = req.body; // 'approved' | 'rejected'
       const result = await deleteRequestService.review(Number(req.params.id), reviewerId, action);
       res.json(result);

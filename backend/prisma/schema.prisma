@@ -38,16 +38,19 @@ model Customer {
 }
 
 model Supplier {
-  id        Int              @id @default(autoincrement())
-  name      String
-  phone     String?
-  email     String?
-  address   String?
-  debt      Float            @default(0)
-  status    String           @default("active") // active | deleted
-  deletedAt DateTime?
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id           Int              @id @default(autoincrement())
+  name         String
+  phone        String?
+  email        String?
+  address      String?
+  companyName  String?
+  taxCode      String?
+  supplierType String           @default("domestic") // domestic | intermediary | international
+  debt         Float            @default(0)
+  status       String           @default("active") // active | deleted
+  deletedAt    DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
   purchases        PurchaseOrder[]
   supplierPayments SupplierPayment[]
 }
@@ -60,6 +63,7 @@ model Product {
   costPrice      Float            @default(0)
   sellingPrice   Float            @default(0)
   stock          Int              @default(0)
+  taxRate        String           @default("10%")   // VAT: 0% | 5% | 8% | 10% | KCT
   status         String           @default("active") // active | deleted
   deletedAt      DateTime?
   createdAt      DateTime         @default(now())
@@ -70,18 +74,20 @@ model Product {
 }
 
 model Invoice {
-  id         Int           @id @default(autoincrement())
-  code       String        @unique // VD: INV-2024-001
-  customerId Int
-  customer   Customer      @relation(fields: [customerId], references: [id])
-  status     String        @default("unpaid") // unpaid | partial | paid
-  totalAmount Float        @default(0)
-  paidAmount  Float        @default(0)
-  note       String?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  items      InvoiceItem[]
-  payments   Payment[]
+  id           Int           @id @default(autoincrement())
+  code         String        @unique // VD: INV-2024-001
+  eInvoiceCode String?       // Mã HĐĐT từ file XML (VD: C25TSL-2)
+  invoiceDate  DateTime?     // Ngày lập trên hóa đơn (có thể khác ngày nhập)
+  customerId   Int
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  status       String        @default("unpaid") // unpaid | partial | paid
+  totalAmount  Float         @default(0)
+  paidAmount   Float         @default(0)
+  note         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  items        InvoiceItem[]
+  payments     Payment[]
 }
 
 model InvoiceItem {
@@ -91,7 +97,8 @@ model InvoiceItem {
   productId Int
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
-  price     Float   // giá tại thời điểm bán
+  price     Float   // giá tại thời điểm bán (chưa VAT)
+  taxRate   String  @default("10%")  // Thuế suất tại thời điểm bán
   subtotal  Float
 }
 
@@ -135,9 +142,10 @@ model PurchaseItem {
 model Cashflow {
   id          Int      @id @default(autoincrement())
   type        String   // income | expense
-  category    String   // sales | payment_received | purchase | salary | other
+  category    String   // payment_received | purchase | salary | other
   amount      Float
   description String?
+  date        DateTime @default(now()) // ngày giao dịch thực tế (có thể khác ngày nhập)
   refId       Int?     // ID tham chiếu (invoice, payment, purchase...)
   refType     String?  // invoice | payment | purchase
   createdAt   DateTime @default(now())
@@ -177,4 +185,26 @@ model DeleteRequest {
   reviewer    User?     @relation("Reviewer", fields: [reviewerId], references: [id])
   reviewedAt  DateTime?
   createdAt   DateTime  @default(now())
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?
+  username  String?
+  action    String   // login | logout | create | update | delete | error
+  module    String?  // customer | invoice | supplier | cashflow | product ...
+  message   String
+  level     String   @default("info") // info | warning | error | critical
+  ip        String?
+  createdAt DateTime @default(now())
+}
+
+model CashflowCategory {
+  id        Int      @id @default(autoincrement())
+  type      String   // income | expense
+  name      String
+  slug      String   @unique
+  isBuiltin Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
 }

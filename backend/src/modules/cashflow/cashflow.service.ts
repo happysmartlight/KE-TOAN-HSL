@@ -4,15 +4,20 @@ export const cashflowService = {
   async getAll(from?: string, to?: string) {
     const where: any = {};
     if (from || to) {
-      where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to + 'T23:59:59');
+      where.date = {};
+      if (from) where.date.gte = new Date(from);
+      if (to) where.date.lte = new Date(to + 'T23:59:59');
     }
-    return prisma.cashflow.findMany({ where, orderBy: { createdAt: 'desc' } });
+    return prisma.cashflow.findMany({ where, orderBy: { date: 'desc' } });
   },
 
-  async create(data: { type: string; category: string; amount: number; description?: string }) {
-    return prisma.cashflow.create({ data });
+  async create(data: { type: string; category: string; amount: number; description?: string; date?: string }) {
+    return prisma.cashflow.create({
+      data: {
+        ...data,
+        date: data.date ? new Date(data.date) : new Date(),
+      },
+    });
   },
 
   async getSummary(from?: string, to?: string) {

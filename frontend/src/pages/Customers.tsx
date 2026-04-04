@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import RequestDeleteModal from '../components/RequestDeleteModal';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
+import HoloCard from '../components/HoloCard';
+import type { HoloData } from '../components/HoloCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
@@ -28,6 +30,7 @@ export default function Customers() {
   const taxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [cardData, setCardData] = useState<HoloData | null>(null);
 
   const load = () => api.get('/customers').then((r) => setRows(r.data));
   useEffect(() => { load(); }, []);
@@ -262,6 +265,7 @@ export default function Customers() {
                 </td>
                 <td className={`fw7 ${c.debt > 0 ? 'c-red' : 'c-green'}`}>{fmt(c.debt)}</td>
                 <td><div className="td-act">
+                  <button className="btn green btn-sm" onClick={() => setCardData({ type: 'customer', id: c.id, name: c.name, createdAt: c.createdAt, phone: c.phone, email: c.email, address: c.address, companyName: c.companyName, taxCode: c.taxCode, debt: c.debt, totalPurchased: c.totalPurchased, invoiceCount: c.invoiceCount })}>Xem</button>
                   <button className="btn yellow btn-sm" onClick={() => openEdit(c)}>Sửa</button>
                   <button className={`btn ${isAdmin ? 'red' : 'ghost'} btn-sm`} onClick={() => handleDelete(c.id, c.name)}>
                     {isAdmin ? 'Xóa' : '🗑 Yêu cầu'}
@@ -280,6 +284,15 @@ export default function Customers() {
           recordLabel={deleteModal.name}
           onClose={() => setDeleteModal(null)}
         />
+      )}
+
+      {cardData && (
+        <div className="holo-modal-bg" onClick={() => setCardData(null)}>
+          <div className="holo-modal-inner" onClick={(e) => e.stopPropagation()}>
+            <HoloCard data={cardData} />
+            <button className="holo-modal-close" onClick={() => setCardData(null)}>[ Đóng ]</button>
+          </div>
+        </div>
       )}
     </div>
   );

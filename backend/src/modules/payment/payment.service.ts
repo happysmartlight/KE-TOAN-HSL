@@ -56,6 +56,7 @@ export const paymentService = {
           type: 'income',
           category: 'payment_received',
           amount,
+          date: new Date(),
           description: `Thu tiền hóa đơn ${invoice.code}`,
           refId: newPayment.id,
           refType: 'payment',

@@ -13,6 +13,8 @@ import Suppliers from './pages/Suppliers';
 import Purchases from './pages/Purchases';
 import Users from './pages/Users';
 import DeleteRequests from './pages/DeleteRequests';
+import Logs from './pages/Logs';
+import CashflowCategories from './pages/CashflowCategories';
 import Login from './pages/Login';
 
 const NAV = [
@@ -38,6 +40,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/': 'Dashboard', '/customers': 'Khách hàng', '/suppliers': 'Nhà cung cấp',
   '/products': 'Sản phẩm', '/invoices': 'Hóa đơn bán', '/purchases': 'Nhập hàng',
   '/cashflow': 'Thu / Chi', '/reports': 'Báo cáo', '/users': 'Người dùng',
+  '/logs': 'Log hệ thống', '/cashflow-categories': 'Danh mục Thu/Chi',
 };
 
 function AppLayout() {
@@ -115,6 +118,14 @@ function AppLayout() {
                   Yêu cầu xóa
                   {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
                 </NavLink>
+                <NavLink to="/cashflow-categories" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📂</span>
+                  Danh mục Thu/Chi
+                </NavLink>
+                <NavLink to="/logs" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📋</span>
+                  Log hệ thống
+                </NavLink>
               </div>
             </div>
           )}
@@ -153,6 +164,8 @@ function AppLayout() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/users" element={<Users />} />
             <Route path="/delete-requests" element={<DeleteRequests />} />
+            <Route path="/logs" element={<Logs />} />
+            <Route path="/cashflow-categories" element={<CashflowCategories />} />
           </Routes>
         </div>
       </div>

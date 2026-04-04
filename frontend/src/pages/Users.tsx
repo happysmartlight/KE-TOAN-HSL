@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
+import ConfirmModal from '../components/ConfirmModal';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
 
@@ -12,6 +13,7 @@ export default function Users() {
   const [form, setForm]   = useState(empty);
   const [editId, setEditId] = useState<number | null>(null);
   const [open, setOpen]   = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: number; username: string; name: string; role: string } | null>(null);
 
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
 
@@ -53,10 +55,15 @@ export default function Users() {
     } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
   };
 
-  const remove = async (id: number, username: string) => {
-    if (!confirm(`Xóa tài khoản "${username}"?`)) return;
-    try { await api.delete(`/users/${id}`); load(); }
-    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
+  const doDelete = async () => {
+    if (!confirmDelete) return;
+    try {
+      await api.delete(`/users/${confirmDelete.id}`);
+      setConfirmDelete(null);
+      load();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Không thể xóa tài khoản');
+    }
   };
 
   return (
@@ -132,13 +139,26 @@ export default function Users() {
                 <td className="c-dim">{new Date(u.createdAt).toLocaleDateString('vi-VN')}</td>
                 <td><div className="td-act">
                   <button className="btn yellow btn-sm" onClick={() => openEdit(u)}>Sửa</button>
-                  {u.id !== me?.id && <button className="btn red btn-sm" onClick={() => remove(u.id, u.username)}>Xóa</button>}
+                  {u.id !== me?.id && (
+                    <button className="btn red btn-sm" onClick={() => setConfirmDelete({ id: u.id, username: u.username, name: u.name, role: u.role })}>Xóa</button>
+                  )}
                 </div></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={`Xóa tài khoản "${confirmDelete.username}"`}
+          message={`Tài khoản của ${confirmDelete.name} sẽ bị xóa vĩnh viễn khỏi hệ thống.`}
+          warning={confirmDelete.role === 'admin' ? 'Đây là tài khoản Admin — hệ thống sẽ từ chối nếu đây là admin cuối cùng.' : undefined}
+          confirmLabel="Xác nhận xóa"
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }

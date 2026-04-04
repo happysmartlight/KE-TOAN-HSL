@@ -22,12 +22,40 @@ export const invoiceController = {
 
   async create(req: Request, res: Response) {
     try {
-      const { customerId, items, note } = req.body;
+      const { customerId, items, note, eInvoiceCode, invoiceDate, totalAmountOverride, initialPaid } = req.body;
       if (!customerId || !items || items.length === 0) {
         return res.status(400).json({ error: 'Thiếu thông tin hóa đơn' });
       }
-      const invoice = await invoiceService.create({ customerId, items, note });
+      const invoice = await invoiceService.create({ customerId, items, note, eInvoiceCode, invoiceDate, totalAmountOverride, initialPaid });
       res.status(201).json(invoice);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  },
+
+  // POST /invoices/xml-preview — trả về preview, không write DB
+  async xmlPreview(req: Request, res: Response) {
+    try {
+      const { invoices } = req.body;
+      if (!Array.isArray(invoices) || invoices.length === 0) {
+        return res.status(400).json({ error: 'Cần ít nhất 1 hóa đơn để preview' });
+      }
+      const preview = await invoiceService.xmlPreview(invoices);
+      res.json(preview);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  },
+
+  // POST /invoices/xml-batch — commit batch đã confirm
+  async xmlBatch(req: Request, res: Response) {
+    try {
+      const { invoices } = req.body;
+      if (!Array.isArray(invoices) || invoices.length === 0) {
+        return res.status(400).json({ error: 'Cần ít nhất 1 hóa đơn để import' });
+      }
+      const result = await invoiceService.batchCreate(invoices);
+      res.status(201).json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }

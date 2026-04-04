@@ -4,9 +4,10 @@ export const reportService = {
   async getCashflowReport(from?: string, to?: string) {
     const where: any = {};
     if (from || to) {
-      where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to + 'T23:59:59');
+      // Dùng `date` (ngày giao dịch thực tế) thay vì `createdAt`
+      where.date = {};
+      if (from) where.date.gte = new Date(from);
+      if (to) where.date.lte = new Date(to + 'T23:59:59');
     }
     const entries = await prisma.cashflow.findMany({ where });
     const income = entries.filter((e) => e.type === 'income').reduce((s, e) => s + e.amount, 0);
@@ -15,20 +16,28 @@ export const reportService = {
   },
 
   async getProfitLoss(from?: string, to?: string) {
-    const where: any = {};
+    // Hóa đơn: ưu tiên invoiceDate (ngày lập thực tế), fallback về createdAt
+    // Tránh tình trạng HĐ năm 2025 import vào 2026 bị tính vào 2026
+    let invoiceWhere: any = { status: { not: 'cancelled' } };
+
     if (from || to) {
-      where.createdAt = {};
-      if (from) where.createdAt.gte = new Date(from);
-      if (to) where.createdAt.lte = new Date(to + 'T23:59:59');
+      const dateRange: any = {};
+      if (from) dateRange.gte = new Date(from);
+      if (to) dateRange.lte = new Date(to + 'T23:59:59');
+
+      invoiceWhere.OR = [
+        { invoiceDate: dateRange },        // HĐ có ngày lập (XML import) — null tự động bị loại
+        { invoiceDate: null, createdAt: dateRange }, // HĐ tạo thủ công — dùng createdAt
+      ];
     }
 
     const invoices = await prisma.invoice.findMany({
-      where: { ...where, status: { not: 'cancelled' } },
+      where: invoiceWhere,
       include: { items: { include: { product: true } } },
     });
 
     let revenue = 0;
-    let cogs = 0; // Cost of Goods Sold
+    let cogs = 0;
 
     for (const invoice of invoices) {
       revenue += invoice.totalAmount;
@@ -39,13 +48,15 @@ export const reportService = {
 
     const grossProfit = revenue - cogs;
 
-    // Chi phí khác (salary, other expenses)
+    // Chi phí khác: dùng `date` field
+    const cfWhere: any = { type: 'expense', category: { in: ['salary', 'other'] } };
+    if (from || to) {
+      cfWhere.date = {};
+      if (from) cfWhere.date.gte = new Date(from);
+      if (to) cfWhere.date.lte = new Date(to + 'T23:59:59');
+    }
     const otherExpenses = await prisma.cashflow.aggregate({
-      where: {
-        ...where,
-        type: 'expense',
-        category: { in: ['salary', 'other'] },
-      },
+      where: cfWhere,
       _sum: { amount: true },
     });
 

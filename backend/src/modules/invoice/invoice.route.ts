@@ -4,8 +4,10 @@ import { requireAdmin } from '../../middleware/auth.middleware';
 
 export const invoiceRouter = Router();
 
-invoiceRouter.get('/', invoiceController.getAll);
-invoiceRouter.get('/:id', invoiceController.getById);
-invoiceRouter.post('/', invoiceController.create);
-invoiceRouter.patch('/:id/cancel', requireAdmin, invoiceController.cancel);
-invoiceRouter.delete('/:id', requireAdmin, invoiceController.delete);
+invoiceRouter.get('/',                    invoiceController.getAll);
+invoiceRouter.get('/:id',                 invoiceController.getById);
+invoiceRouter.post('/',                   invoiceController.create);
+invoiceRouter.post('/xml-preview',        invoiceController.xmlPreview);
+invoiceRouter.post('/xml-batch',          invoiceController.xmlBatch);
+invoiceRouter.patch('/:id/cancel',        requireAdmin, invoiceController.cancel);
+invoiceRouter.delete('/:id',              requireAdmin, invoiceController.delete);

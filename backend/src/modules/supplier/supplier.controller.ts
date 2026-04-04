@@ -22,9 +22,9 @@ export const supplierController = {
 
   async create(req: Request, res: Response) {
     try {
-      const { name, phone, email, address } = req.body;
+      const { name, phone, email, address, companyName, taxCode, supplierType } = req.body;
       if (!name) return res.status(400).json({ error: 'Tên nhà cung cấp là bắt buộc' });
-      res.status(201).json(await supplierService.create({ name, phone, email, address }));
+      res.status(201).json(await supplierService.create({ name, phone, email, address, companyName, taxCode, supplierType }));
     } catch {
       res.status(500).json({ error: 'Lỗi server' });
     }
@@ -35,6 +35,15 @@ export const supplierController = {
       res.json(await supplierService.update(Number(req.params.id), req.body));
     } catch {
       res.status(500).json({ error: 'Lỗi server' });
+    }
+  },
+
+  async taxLookup(req: Request, res: Response) {
+    try {
+      const result = await supplierService.taxLookup(req.params.taxCode);
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || 'Không tra cứu được MST' });
     }
   },
 

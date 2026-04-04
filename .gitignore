@@ -2,4 +2,23 @@ node_modules/
 frontend/node_modules/
 backend/node_modules/
 .DS_Store
+
+# Environment files (không commit .env, chỉ commit .env.example)
 .env
+.env.local
+.env.production
+
+# Build output
+backend/dist/
+backend/public/
+frontend/dist/
+
+# SQLite database (không commit DB)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# PM2 logs
+logs/
+*.log

@@ -12,12 +12,35 @@ export const supplierService = {
     });
   },
 
-  async create(data: { name: string; phone?: string; email?: string; address?: string }) {
+  async create(data: {
+    name: string; phone?: string; email?: string; address?: string;
+    companyName?: string; taxCode?: string; supplierType?: string;
+  }) {
     return prisma.supplier.create({ data });
   },
 
-  async update(id: number, data: Partial<{ name: string; phone: string; email: string; address: string }>) {
+  async update(id: number, data: Partial<{
+    name: string; phone: string; email: string; address: string;
+    companyName: string; taxCode: string; supplierType: string;
+  }>) {
     return prisma.supplier.update({ where: { id }, data });
+  },
+
+  async taxLookup(taxCode: string) {
+    const url = `https://api.xinvoice.vn/gdt-api/tax-payer/${taxCode.trim()}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new Error('Không tìm thấy thông tin MST');
+    const raw = await response.json() as any;
+    const data = raw?.data || raw;
+    if (!data || (!data.name && !data.tenDoanhNghiep && !data.ten)) {
+      throw new Error('MST không tồn tại hoặc không có dữ liệu');
+    }
+    return {
+      name:    data.name || data.tenDoanhNghiep || data.ten || '',
+      address: data.address || data.diaChi || data.diaChiKinhDoanh || '',
+      status:  data.status || data.trangThai || data.tinhTrang || '',
+      taxCode: taxCode.trim(),
+    };
   },
 
   async delete(id: number) {

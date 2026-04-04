@@ -6,20 +6,13 @@ import type { FilterState } from '../components/FilterBar';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
-const CATEGORY_LABEL: Record<string, string> = {
-  sales: 'Doanh thu',
-  payment_received: 'Thu tiền HĐ',
-  purchase: 'Nhập hàng',
-  salary: 'Lương',
-  other: 'Khác',
-};
-
 export default function Cashflow() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [entries, setEntries] = useState<any[]>([]);
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
-  const [form, setForm]       = useState({ type: 'income', category: 'other', amount: '', description: '' });
+  const [categories, setCategories] = useState<any[]>([]);
+  const [form, setForm]       = useState({ type: 'income', category: '', amount: '', description: '' });
   const [open, setOpen]       = useState(false);
   const [filter, setFilter]   = useState<FilterState>(defaultFilter);
 
@@ -27,12 +20,33 @@ export default function Cashflow() {
     api.get('/cashflow').then((r) => setEntries(r.data));
     api.get('/cashflow/summary').then((r) => setSummary(r.data));
   };
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    api.get('/cashflow-categories').then((r) => {
+      const cats: any[] = r.data;
+      setCategories(cats);
+      // Set default category to first active income category
+      const first = cats.find((c) => c.type === 'income' && c.isActive);
+      if (first) setForm((f) => ({ ...f, category: first.slug }));
+    });
+    load();
+  }, []);
+
+  const activeByType = (type: string) => categories.filter((c) => c.type === type && c.isActive);
+
+  const categoryLabel = (slug: string) => categories.find((c) => c.slug === slug)?.name || slug;
+
+  // When type changes, reset category to first active of that type
+  const handleTypeChange = (type: string) => {
+    const first = categories.find((c) => c.type === type && c.isActive);
+    setForm((f) => ({ ...f, type, category: first?.slug || '' }));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     await api.post('/cashflow', { ...form, amount: Number(form.amount) });
-    setForm({ type: 'income', category: 'other', amount: '', description: '' });
+    const defaultCat = categories.find((c) => c.type === 'income' && c.isActive);
+    setForm({ type: 'income', category: defaultCat?.slug || '', amount: '', description: '' });
     setOpen(false); load();
   };
 
@@ -42,30 +56,35 @@ export default function Cashflow() {
       const q = filter.search.toLowerCase();
       r = r.filter((e) =>
         e.description?.toLowerCase().includes(q) ||
-        (CATEGORY_LABEL[e.category] || e.category).toLowerCase().includes(q)
+        categoryLabel(e.category).toLowerCase().includes(q)
       );
     }
     if (filter.type)      r = r.filter((e) => e.type === filter.type);
-    if (filter.status)    r = r.filter((e) => e.category === filter.status); // reuse status field for category
-    if (filter.dateFrom)  r = r.filter((e) => new Date(e.createdAt) >= new Date(filter.dateFrom));
-    if (filter.dateTo)    r = r.filter((e) => new Date(e.createdAt) <= new Date(filter.dateTo + 'T23:59:59'));
+    if (filter.status)    r = r.filter((e) => e.category === filter.status);
+    if (filter.dateFrom)  r = r.filter((e) => new Date(e.date) >= new Date(filter.dateFrom));
+    if (filter.dateTo)    r = r.filter((e) => new Date(e.date) <= new Date(filter.dateTo + 'T23:59:59'));
     if (filter.amountMin) r = r.filter((e) => e.amount >= Number(filter.amountMin));
     if (filter.amountMax) r = r.filter((e) => e.amount <= Number(filter.amountMax));
     r.sort((a, b) => {
       const dir = filter.sortDir === 'desc' ? -1 : 1;
       if (filter.sortBy === 'amount') return dir * (a.amount - b.amount);
-      return dir * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) * -1;
+      return dir * (new Date(a.date).getTime() - new Date(b.date).getTime());
     });
     return r;
-  }, [entries, filter]);
+  }, [entries, filter, categories]);
 
   const handleDelete = async (e: any) => {
-    if (!confirm(`Xóa bút toán "${e.description || e.category}"?`)) return;
+    if (!confirm(`Xóa bút toán "${e.description || categoryLabel(e.category)}"?`)) return;
     try {
       await api.delete(`/cashflow/${e.id}`);
       load();
     } catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi xóa'); }
   };
+
+  // Build dynamic category filter options
+  const catStatusOptions = categories
+    .filter((c) => c.isActive)
+    .map((c) => ({ value: c.slug, label: c.name }));
 
   return (
     <div>
@@ -95,7 +114,7 @@ export default function Cashflow() {
             <div className="fg2" style={{ marginBottom: 10 }}>
               <div>
                 <label className="lbl">Loại</label>
-                <select className="inp" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                <select className="inp" value={form.type} onChange={(e) => handleTypeChange(e.target.value)}>
                   <option value="income">Thu</option>
                   <option value="expense">Chi</option>
                 </select>
@@ -103,11 +122,9 @@ export default function Cashflow() {
               <div>
                 <label className="lbl">Danh mục</label>
                 <select className="inp" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-                  <option value="sales">Doanh thu</option>
-                  <option value="payment_received">Thu tiền HĐ</option>
-                  <option value="purchase">Nhập hàng</option>
-                  <option value="salary">Lương</option>
-                  <option value="other">Khác</option>
+                  {activeByType(form.type).map((c) => (
+                    <option key={c.id} value={c.slug}>{c.name}</option>
+                  ))}
                 </select>
               </div>
               <div><label className="lbl">Số tiền *</label><input className="inp" type="number" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
@@ -129,13 +146,7 @@ export default function Cashflow() {
           { value: 'income',  label: 'Thu' },
           { value: 'expense', label: 'Chi' },
         ]}
-        statusOptions={[
-          { value: 'sales',            label: 'Doanh thu' },
-          { value: 'payment_received', label: 'Thu tiền HĐ' },
-          { value: 'purchase',         label: 'Nhập hàng' },
-          { value: 'salary',           label: 'Lương' },
-          { value: 'other',            label: 'Khác' },
-        ]}
+        statusOptions={catStatusOptions}
         sortOptions={[
           { value: 'date_desc',   label: '↓ Ngày mới nhất' },
           { value: 'date_asc',    label: '↑ Ngày cũ nhất' },
@@ -152,10 +163,10 @@ export default function Cashflow() {
             {filtered.map((e) => (
               <tr key={e.id}>
                 <td><span className={`tag ${e.type === 'income' ? 'green' : 'red'}`}>{e.type === 'income' ? 'THU' : 'CHI'}</span></td>
-                <td className="c-dim">{CATEGORY_LABEL[e.category] || e.category}</td>
+                <td className="c-dim">{categoryLabel(e.category)}</td>
                 <td className={`fw7 ${e.type === 'income' ? 'c-green' : 'c-red'}`}>{fmt(e.amount)}</td>
                 <td>{e.description || <span className="c-dim">—</span>}</td>
-                <td className="c-dim">{new Date(e.createdAt).toLocaleDateString('vi-VN')}</td>
+                <td className="c-dim">{new Date(e.date).toLocaleDateString('vi-VN')}</td>
                 {isAdmin && (
                   <td><button className="btn red btn-sm" onClick={() => handleDelete(e)}>Xóa</button></td>
                 )}
