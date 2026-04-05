@@ -11,5 +11,8 @@ adminRouter.get('/network',               adminController.getNetworkInfo);
 adminRouter.get('/tailscale/state',       adminController.getTailscaleState);
 adminRouter.post('/tailscale/start',      adminController.startTailscaleSetup);
 adminRouter.post('/tailscale/reset',      adminController.resetTailscaleState);
+adminRouter.get('/update/state',          adminController.getUpdateState);
+adminRouter.post('/update/check',         adminController.checkForUpdates);
+adminRouter.post('/update/start',         adminController.startUpdate);
 adminRouter.get('/rank-config',     adminController.getRankConfig);
 adminRouter.put('/rank-config',     adminController.saveRankConfig);

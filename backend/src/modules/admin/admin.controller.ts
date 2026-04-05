@@ -83,6 +83,26 @@ export const adminController = {
     }
   },
 
+  // ── Update ──────────────────────────────────────────────────────────────
+  getUpdateState(_req: Request, res: Response) {
+    res.json(adminService.getUpdateState());
+  },
+
+  async checkForUpdates(_req: Request, res: Response) {
+    try {
+      await adminService.checkForUpdates();
+      res.json(adminService.getUpdateState());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  startUpdate(_req: Request, res: Response) {
+    const result = adminService.startUpdate();
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  },
+
   getRankConfig(_req: Request, res: Response) {
     try {
       res.json(adminService.getRankConfig());
