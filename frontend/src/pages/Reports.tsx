@@ -308,7 +308,7 @@ export default function Reports() {
               </div>
 
               {/* Summary table */}
-              <div className="table-wrap" style={{ marginTop: 14 }}>
+              <div className="table-wrap table-wrap-sm" style={{ marginTop: 14 }}>
                 <table className="nt" style={{ fontSize: 11 }}>
                   <thead>
                     <tr>

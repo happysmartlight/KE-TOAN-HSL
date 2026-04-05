@@ -1,3 +1,4 @@
+import { toast } from '../components/Toast';
 import { useEffect, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +23,7 @@ export default function DeleteRequests() {
     try {
       await api.patch(`/delete-requests/${id}`, { action });
       load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
   const filtered = rows.filter((r) => filter === 'all' || r.status === filter);

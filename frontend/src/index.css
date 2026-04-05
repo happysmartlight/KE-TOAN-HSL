@@ -183,16 +183,43 @@ html,body,#root{
 .nav-link.active::before{background:var(--cyan)}
 
 .sidebar-footer{
-  padding:12px 14px;border-top:1px solid var(--border-dim);
+  padding:14px 14px 12px;border-top:1px solid var(--border-dim);
   background:rgba(0,0,0,0.4);
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  position:relative;
 }
-.user-name{font-size:11px;color:var(--text-bright);margin-bottom:1px}
+/* Scanline glow trên footer */
+.sidebar-footer::before{
+  content:'';position:absolute;top:0;left:10%;right:10%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan) 40%,var(--purple) 70%,transparent);
+  opacity:0.5;
+}
+
+/* Terminal user block */
+.user-name{
+  font-size:11px;font-weight:700;letter-spacing:1.5px;
+  color:var(--cyan);text-shadow:var(--cyan-glow);
+  font-family:var(--font);
+  margin-bottom:5px;
+  position:relative;display:flex;align-items:center;gap:5px;justify-content:center;
+}
+/* Prefix dấu nhắc terminal */
+.user-name::before{content:'>';color:var(--text-dim);font-weight:300;font-size:10px}
+
 .user-role-badge{
-  display:inline-block;font-size:9px;padding:1px 7px;
-  border-radius:2px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;
+  display:inline-block;font-size:9px;padding:2px 9px;
+  border-radius:2px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;
 }
-.role-admin{background:var(--purple-dim);color:var(--purple);border:1px solid rgba(191,0,255,0.25)}
-.role-staff{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(0,245,255,0.25)}
+.role-admin{
+  background:var(--purple-dim);color:var(--purple);
+  border:1px solid rgba(191,0,255,0.35);
+  box-shadow:0 0 8px rgba(191,0,255,0.2);
+  text-shadow:0 0 6px rgba(191,0,255,0.6);
+}
+.role-staff{
+  background:var(--cyan-dim);color:var(--cyan);
+  border:1px solid rgba(0,245,255,0.25);
+}
 
 .btn-logout{
   width:100%;background:transparent;
@@ -290,13 +317,28 @@ html,body,#root{
 /* ── Table ── */
 .table-wrap{
   background:var(--bg-card);border:1px solid var(--border-dim);
-  border-radius:var(--r);overflow:auto;
+  border-radius:var(--r);
+  overflow:auto;
+  max-height:calc(100vh - 240px);
 }
-table.nt{width:100%;border-collapse:collapse;font-family:var(--font);font-size:12px}
-table.nt thead tr{background:var(--bg-card2);border-bottom:1px solid var(--border)}
+/* Trang có nhiều block phía trên (period selector, form mở...) → bảng ngắn hơn */
+.table-wrap-sm{ max-height:calc(100vh - 360px) }
+table.nt{
+  width:100%;
+  /* separate thay collapse: fix rank-color rows bleeding through sticky header */
+  border-collapse:separate;
+  border-spacing:0;
+  font-family:var(--font);font-size:12px;
+}
+table.nt thead tr{background:var(--bg-card2)}
 table.nt th{
+  position:sticky;top:0;z-index:5;
   padding:9px 12px;text-align:left;font-size:10px;font-weight:600;
   color:var(--cyan);text-transform:uppercase;letter-spacing:1px;white-space:nowrap;
+  background:var(--bg-card2);
+  /* border-bottom + shadow tạo separator rõ ràng khi scroll, mask hoàn toàn rank rows bên dưới */
+  border-bottom:2px solid var(--border);
+  box-shadow:0 3px 8px rgba(0,0,0,0.45);
 }
 table.nt td{
   padding:8px 12px;color:var(--text);
@@ -305,24 +347,30 @@ table.nt td{
 table.nt tr:hover td{background:var(--bg-hover)}
 table.nt tr:last-child td{border-bottom:none}
 .td-act{display:flex;gap:6px;align-items:center}
-.empty-row td{text-align:center;padding:32px;color:var(--text-dim)}
+.empty-row td{text-align:center;padding:0;color:var(--text-dim);border:none!important}
+.empty-chart{
+  display:flex;align-items:center;justify-content:center;
+  height:180px;color:var(--text-dim);font-size:11px;
+  opacity:0.5;letter-spacing:1px;
+}
 
 /* ── Buttons ── */
 .btn{
   font-family:var(--font);font-size:11px;font-weight:600;letter-spacing:0.5px;
   padding:7px 14px;border-radius:var(--r);border:1px solid;cursor:pointer;
   transition:all 0.12s;text-transform:uppercase;white-space:nowrap;display:inline-flex;
-  align-items:center;gap:5px;
+  align-items:center;gap:5px;min-height:32px;
 }
-.btn-sm{padding:4px 9px;font-size:10px}
+.btn-sm{padding:4px 9px;font-size:10px;min-height:28px}
 .btn:disabled{opacity:0.35;cursor:not-allowed}
+/* Ghost button improved contrast */
+.btn.ghost{background:transparent;color:var(--text-dim);border-color:rgba(100,100,140,0.5)}
 
 .btn.cyan  {background:var(--cyan-dim);  color:var(--cyan);  border-color:rgba(0,245,255,0.35)}
 .btn.green {background:var(--green-dim); color:var(--green); border-color:rgba(0,255,136,0.35)}
 .btn.red   {background:var(--red-dim);   color:var(--red);   border-color:rgba(255,0,85,0.35)}
 .btn.yellow{background:var(--yellow-dim);color:var(--yellow);border-color:rgba(255,204,0,0.35)}
 .btn.purple{background:var(--purple-dim);color:var(--purple);border-color:rgba(191,0,255,0.35)}
-.btn.ghost {background:transparent;color:var(--text-dim);border-color:rgba(80,80,112,0.4)}
 
 .btn.cyan:hover  {background:rgba(0,245,255,0.2);  box-shadow:var(--cyan-glow)}
 .btn.green:hover {background:rgba(0,255,136,0.18); box-shadow:var(--green-glow)}
@@ -510,8 +558,8 @@ select.inp option{background:var(--bg-card);color:var(--text)}
   /* Page area more compact */
   .page-area { padding:12px 14px }
 
-  /* Tables scroll horizontally */
-  .table-wrap { overflow-x:auto;-webkit-overflow-scrolling:touch }
+  /* Tables: horizontal scroll + tighter max-height on mobile */
+  .table-wrap { overflow:auto;-webkit-overflow-scrolling:touch;max-height:calc(100vh - 260px) }
 
   /* Login box */
   .login-box { width:calc(100vw - 32px);padding:28px 22px }
@@ -533,6 +581,11 @@ select.inp option{background:var(--bg-card);color:var(--text)}
   .page-area { padding:10px 10px }
   .btn-group { gap:5px }
   .btn { font-size:10px;padding:5px 10px }
+  /* Touch-friendly: larger tap targets on mobile */
+  .btn { min-height:40px }
+  .btn-sm { min-height:36px }
+  /* Inputs: 16px prevents iOS auto-zoom */
+  input.inp,select.inp,textarea.inp { font-size:16px }
 }
 
 /* ═══════════════════════════════════════
@@ -709,6 +762,60 @@ select.inp option{background:var(--bg-card);color:var(--text)}
   }
 }
 
+/* ═══════════════════════════════════════
+   ACCESSIBILITY
+   ═══════════════════════════════════════ */
+
+/* Focus indicator — keyboard navigation */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: var(--r);
+}
+/* Remove default outline when using mouse */
+:focus:not(:focus-visible) { outline: none }
+
+/* Input already has custom focus style via box-shadow — skip outline */
+input.inp:focus-visible,
+select.inp:focus-visible,
+textarea.inp:focus-visible {
+  outline: none;
+}
+
+/* Inline form validation states */
+input.inp.inp-error,
+select.inp.inp-error,
+textarea.inp.inp-error {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px rgba(255,0,85,0.15);
+}
+input.inp.inp-ok,
+select.inp.inp-ok {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(0,255,136,0.1);
+}
+.field-error {
+  font-size: 10px;
+  color: var(--red);
+  margin-top: 3px;
+  letter-spacing: 0.3px;
+}
+.field-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 3px;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .blink, .logo-prompt { animation: none !important; opacity: 1 }
+}
+
 /* ── Chart animation effects ── */
 
 /* Pulsing glow dot at each data point */
@@ -732,4 +839,58 @@ select.inp option{background:var(--bg-card);color:var(--text)}
 }
 .recharts-line-curve {
   filter: drop-shadow(0 0 3px currentColor);
+}
+
+/* ═══════════════════════════════════════
+   SKELETON LOADER
+   ═══════════════════════════════════════ */
+@keyframes shimmer {
+  0%   { background-position: -600px 0 }
+  100% { background-position:  600px 0 }
+}
+.skeleton {
+  display: inline-block;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(0,245,255,0.07)   50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 600px 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+.skeleton-row td { padding: 10px 12px; border-bottom: 1px solid var(--border-dim) }
+.skeleton-cell, .skeleton.w-xs, .skeleton.w-sm, .skeleton.w-md, .skeleton.w-lg, .skeleton.w-full { height: 12px; border-radius: 3px }
+.skeleton-cell.w-xs, .skeleton.w-xs  { width: 50px }
+.skeleton-cell.w-sm, .skeleton.w-sm  { width: 90px }
+.skeleton-cell.w-md, .skeleton.w-md  { width: 140px }
+.skeleton-cell.w-lg, .skeleton.w-lg  { width: 200px }
+.skeleton-cell.w-full, .skeleton.w-full { width: 100% }
+
+/* ═══════════════════════════════════════
+   PRINT STYLES (hóa đơn)
+   ═══════════════════════════════════════ */
+@media print {
+  .sidebar, .topbar, .hamburger, .page-header .btn,
+  .filter-bar, .td-act, .holo-modal-bg { display: none !important }
+
+  body, html, #root { overflow: visible !important; height: auto !important }
+  .app-shell { display: block !important }
+  .main-content { width: 100% !important }
+  .page-area { padding: 0 !important }
+
+  .table-wrap { overflow: visible !important }
+  table.nt { font-size: 11px; border-collapse: collapse; width: 100% }
+  table.nt th, table.nt td {
+    border: 1px solid #ccc !important;
+    padding: 5px 8px !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+  table.nt th { background: #f0f0f0 !important; font-weight: 700 }
+
+  .form-panel, .card { border: 1px solid #ddd !important; background: #fff !important }
+  .page-title { color: #000 !important; font-size: 16px }
+  .tag { border: 1px solid #aaa !important; color: #333 !important; background: #f5f5f5 !important }
 }

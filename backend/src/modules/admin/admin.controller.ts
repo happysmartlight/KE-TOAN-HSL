@@ -28,6 +28,14 @@ export const adminController = {
     }
   },
 
+  getHealth(_req: Request, res: Response) {
+    try {
+      res.json(adminService.getHealth());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
   async purgeGroup(req: Request, res: Response) {
     const { group } = req.params;
     if (!VALID_GROUPS.includes(group as GroupName)) {
@@ -47,6 +55,29 @@ export const adminController = {
     try {
       await adminService.purgeAll();
       res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  getRankConfig(_req: Request, res: Response) {
+    try {
+      res.json(adminService.getRankConfig());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  saveRankConfig(req: Request, res: Response) {
+    try {
+      const body = req.body; // { customer?, supplier?, product?, user? }
+      const VALID_GROUPS = ['customer', 'supplier', 'product', 'user'];
+      const hasValid = VALID_GROUPS.some((g) => Array.isArray(body[g]) && body[g].length > 0);
+      if (!hasValid) {
+        return res.status(400).json({ error: 'Cần ít nhất một group hợp lệ (customer/supplier/product/user)' });
+      }
+      const config = adminService.saveRankConfig(body);
+      res.json(config);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

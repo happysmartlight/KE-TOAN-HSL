@@ -1,9 +1,43 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 
 const prisma = new PrismaClient();
 
 export type GroupName = 'customers' | 'suppliers' | 'products' | 'invoices' | 'purchases' | 'cashflow' | 'logs';
+
+export type RankTier = {
+  label: string;
+  min: number;
+  icon: string;
+  color: string;
+  glow: string;
+};
+
+export type RankConfig = {
+  customer: RankTier[];
+  supplier: RankTier[];
+  product:  RankTier[];
+  user:     RankTier[];
+};
+
+const RANK_CONFIG_PATH = path.join(__dirname, '../../../prisma/rank-config.json');
+
+const DEFAULT_TIERS: RankTier[] = [
+  { label: 'THÁCH ĐẤU', min: 50_000_000, icon: '⚔️',  color: '#ff2244', glow: '#ff003344' },
+  { label: 'KIM CƯƠNG',  min: 20_000_000, icon: '💎',  color: '#00d4ff', glow: '#00aaff44' },
+  { label: 'BẠCH KIM',   min: 10_000_000, icon: '🔮',  color: '#bf80ff', glow: '#9944ff44' },
+  { label: 'VÀNG',       min:  5_000_000, icon: '⭐',  color: '#ffcc00', glow: '#ffaa0044' },
+];
+
+const DEFAULT_RANK_CONFIG: RankConfig = {
+  customer: [...DEFAULT_TIERS],
+  supplier: [...DEFAULT_TIERS],
+  product:  [...DEFAULT_TIERS],
+  user:     [...DEFAULT_TIERS],
+};
 
 export const adminService = {
   async verifyAdminPassword(userId: number, password: string): Promise<boolean> {
@@ -40,6 +74,48 @@ export const adminService = {
       purchases, purchaseItems,
       payments, supplierPayments,
       cashflow, inventoryLogs, logs, deleteRequests,
+    };
+  },
+
+  getHealth() {
+    const DB_PATH = path.join(__dirname, '../../../../prisma/dev.db');
+    const uptimeSeconds = process.uptime();
+    const totalMem = os.totalmem();
+    const freeMem  = os.freemem();
+
+    let dbSize = 0;
+    try { dbSize = fs.statSync(DB_PATH).size; } catch {}
+
+    let disk: { total: number; free: number; used: number } | null = null;
+    try {
+      const statfs = (fs as any).statfsSync?.(path.dirname(DB_PATH));
+      if (statfs) {
+        disk = {
+          total: statfs.bsize * statfs.blocks,
+          free:  statfs.bsize * statfs.bfree,
+          used:  statfs.bsize * (statfs.blocks - statfs.bfree),
+        };
+      }
+    } catch {}
+
+    return {
+      uptime:      uptimeSeconds,
+      nodeVersion: process.version,
+      platform:    os.platform(),
+      arch:        os.arch(),
+      hostname:    os.hostname(),
+      ram: {
+        total: totalMem,
+        free:  freeMem,
+        used:  totalMem - freeMem,
+      },
+      cpu: {
+        model:   os.cpus()[0]?.model || 'N/A',
+        cores:   os.cpus().length,
+        loadavg: os.loadavg(),
+      },
+      dbSize,
+      disk,
     };
   },
 
@@ -144,6 +220,29 @@ export const adminService = {
       default:
         throw new Error(`Unknown group: ${group}`);
     }
+  },
+
+  getRankConfig(): RankConfig {
+    try {
+      if (fs.existsSync(RANK_CONFIG_PATH)) {
+        return JSON.parse(fs.readFileSync(RANK_CONFIG_PATH, 'utf-8'));
+      }
+    } catch {}
+    return DEFAULT_RANK_CONFIG;
+  },
+
+  saveRankConfig(incoming: Partial<RankConfig>): RankConfig {
+    const current = adminService.getRankConfig();
+    const merged: RankConfig = {
+      customer: incoming.customer ?? current.customer,
+      supplier: incoming.supplier ?? current.supplier,
+      product:  incoming.product  ?? current.product,
+      user:     incoming.user     ?? current.user,
+    };
+    const dir = path.dirname(RANK_CONFIG_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(RANK_CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+    return merged;
   },
 
   async purgeAll() {

@@ -1,4 +1,6 @@
+import { toast } from '../components/Toast';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import RequestDeleteModal from '../components/RequestDeleteModal';
@@ -7,6 +9,7 @@ import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
 import HoloCard, { getCustomerRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
+import EmptyState from '../components/EmptyState';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
@@ -34,7 +37,11 @@ export default function Customers() {
   const [filter, setFilter] = useState<FilterState>({ ...defaultFilter, sortBy: 'purchased', sortDir: 'desc' });
   const [cardData, setCardData] = useState<HoloData | null>(null);
 
-  const load = () => api.get('/customers').then((r) => setRows(r.data));
+  // ESC: đóng modal trong → ngoài
+  useEscKey(cardData ? () => setCardData(null) : open ? () => setOpen(false) : null);
+
+  const [loading, setLoading] = useState(true);
+  const load = () => api.get('/customers').then((r) => { setRows(r.data); setLoading(false); });
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -125,7 +132,7 @@ export default function Customers() {
 
   const doDelete = async (id: number) => {
     try { await api.delete(`/customers/${id}`); setConfirmDelete(null); load(); }
-    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
+    catch (err: any) { toast.error(err?.response?.data?.error || 'Không thể xóa'); }
   };
 
   return (
@@ -244,12 +251,30 @@ export default function Customers() {
             <th>Tên khách hàng</th><th>Công ty / MST</th><th>Điện thoại</th><th>Tổng mua</th><th>Công nợ</th><th></th>
           </tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{rows.length === 0 ? 'Chưa có khách hàng' : 'Không tìm thấy kết quả'}</td></tr>}
+            {loading ? Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="skeleton-row">
+                <td><div className="skeleton w-md"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+              </tr>
+            )) : <>
+            {filtered.length === 0 && (
+              <tr className="empty-row"><td colSpan={6}>
+                <EmptyState
+                  icon="👥"
+                  title={rows.length === 0 ? 'Chưa có khách hàng' : 'Không tìm thấy kết quả'}
+                  description={rows.length === 0 ? 'Thêm khách hàng đầu tiên để bắt đầu quản lý.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'}
+                />
+              </td></tr>
+            )}
             {filtered.map((c) => {
               const rank = getCustomerRank(c.totalPurchased ?? 0);
               return (
-              <tr key={c.id} style={rank ? { background: `${rank.color}08`, borderLeft: `2px solid ${rank.color}55` } : undefined}>
-                <td>
+              <tr key={c.id} style={rank ? { background: `${rank.color}08` } : undefined}>
+                <td style={rank ? { borderLeft: `2px solid ${rank.color}55` } : undefined}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {rank && (
                       <span title={rank.label} style={{ fontSize: 15, flexShrink: 0 }}>{rank.icon}</span>
@@ -290,6 +315,7 @@ export default function Customers() {
               </tr>
               );
             })}
+            </>}
           </tbody>
         </table>
       </div>

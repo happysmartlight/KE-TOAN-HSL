@@ -1,4 +1,7 @@
+import EmptyState from '../components/EmptyState';
+import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
+import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import SearchSelect from '../components/SearchSelect';
@@ -19,7 +22,10 @@ export default function Purchases() {
   const [items, setItems]         = useState([{ productId: '', quantity: 1, costPrice: 0 }]);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
 
-  const load = () => api.get('/purchases').then((r) => setRows(r.data));
+  useEscKey(open ? () => setOpen(false) : null);
+
+  const [loading, setLoading] = useState(true);
+  const load = () => api.get('/purchases').then((r) => { setRows(r.data); setLoading(false); });
   useEffect(() => { load(); api.get('/suppliers').then((r) => setSuppliers(r.data)); api.get('/products').then((r) => setProducts(r.data)); }, []);
 
   const addItem = () => setItems([...items, { productId: '', quantity: 1, costPrice: 0 }]);
@@ -38,7 +44,7 @@ export default function Purchases() {
     try {
       await api.post('/purchases', { supplierId: Number(supplierId), note, items: items.map((i) => ({ productId: Number(i.productId), quantity: Number(i.quantity), costPrice: Number(i.costPrice) })) });
       setOpen(false); setItems([{ productId: '', quantity: 1, costPrice: 0 }]); setSupplierId(''); setNote(''); load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
   const filtered = useMemo(() => {
@@ -73,7 +79,7 @@ export default function Purchases() {
     try {
       await api.patch(`/purchases/${po.id}/cancel`);
       load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi hủy'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi hủy'); }
   };
 
   return (
@@ -169,7 +175,22 @@ export default function Purchases() {
         <table className="nt">
           <thead><tr><th>Mã đơn</th><th>Nhà cung cấp</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày tạo</th><th></th></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{rows.length === 0 ? 'Chưa có đơn nhập hàng' : 'Không tìm thấy kết quả'}</td></tr>}
+            {loading ? Array.from({ length: 4 }).map((_, i) => (
+              <tr key={i} className="skeleton-row">
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-md"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+              </tr>
+            )) : <>
+            {filtered.length === 0 && (
+              <tr className="empty-row"><td colSpan={6}>
+                <EmptyState icon="🛒" title={rows.length === 0 ? 'Chưa có đơn nhập hàng' : 'Không tìm thấy kết quả'}
+                  description={rows.length === 0 ? 'Tạo đơn nhập hàng đầu tiên.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'} />
+              </td></tr>
+            )}
             {filtered.map((p) => {
               const isCancelled = p.status === 'cancelled';
               return (
@@ -189,6 +210,7 @@ export default function Purchases() {
               </tr>
               );
             })}
+            </>}
           </tbody>
         </table>
       </div>

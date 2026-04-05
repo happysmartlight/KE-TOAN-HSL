@@ -46,6 +46,18 @@ export const deleteRequestService = {
   async countPending() {
     return prisma.deleteRequest.count({ where: { status: 'pending' } });
   },
+
+  async getMine(userId: number) {
+    return prisma.deleteRequest.findMany({
+      where: { requesterId: userId },
+      include: { reviewer: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  async countMine(userId: number) {
+    return prisma.deleteRequest.count({ where: { requesterId: userId, status: 'pending' } });
+  },
 };
 
 async function softDeleteRecord(modelName: string, recordId: number) {

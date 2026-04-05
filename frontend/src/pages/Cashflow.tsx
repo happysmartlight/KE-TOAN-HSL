@@ -1,4 +1,7 @@
+import EmptyState from '../components/EmptyState';
+import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
+import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
@@ -25,11 +28,14 @@ export default function Cashflow() {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [entries, setEntries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({ income: 0, expense: 0, balance: 0 });
   const [categories, setCategories] = useState<any[]>([]);
   const [form, setForm]       = useState({ type: 'income', category: '', amount: '', description: '' });
   const [open, setOpen]       = useState(false);
   const [filter, setFilter]   = useState<FilterState>(defaultFilter);
+
+  useEscKey(open ? () => setOpen(false) : null);
 
   // Period selector
   const [periodType, setPeriodType] = useState<PeriodType>('month');
@@ -37,9 +43,10 @@ export default function Cashflow() {
   const [month, setMonth] = useState(thisMonth);
 
   const load = () => {
+    setLoading(true);
     const { from, to } = getPeriodRange(periodType, year, month);
     const q = `?from=${from}&to=${to}`;
-    api.get('/cashflow' + q).then((r) => setEntries(r.data));
+    api.get('/cashflow' + q).then((r) => { setEntries(r.data); setLoading(false); });
     api.get('/cashflow/summary' + q).then((r) => setSummary(r.data));
   };
 
@@ -99,7 +106,7 @@ export default function Cashflow() {
     try {
       await api.delete(`/cashflow/${e.id}`);
       load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi xóa'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi xóa'); }
   };
 
   // Build dynamic category filter options
@@ -208,11 +215,26 @@ export default function Cashflow() {
         ]}
       />
 
-      <div className="table-wrap">
+      <div className="table-wrap table-wrap-sm">
         <table className="nt">
           <thead><tr><th>Loại</th><th>Danh mục</th><th>Số tiền</th><th>Mô tả</th><th>Ngày</th>{isAdmin && <th></th>}</tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={isAdmin ? 6 : 5}>{entries.length === 0 ? 'Chưa có dữ liệu' : 'Không tìm thấy kết quả'}</td></tr>}
+            {loading ? Array.from({ length: 4 }).map((_, i) => (
+              <tr key={i} className="skeleton-row">
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-md"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-lg"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                {isAdmin && <td></td>}
+              </tr>
+            )) : <>
+            {filtered.length === 0 && (
+              <tr className="empty-row"><td colSpan={isAdmin ? 6 : 5}>
+                <EmptyState icon="💰" title={entries.length === 0 ? 'Chưa có bút toán' : 'Không tìm thấy kết quả'}
+                  description={entries.length === 0 ? 'Ghi nhận thu/chi đầu tiên để bắt đầu.' : 'Thử thay đổi khoảng thời gian hoặc bộ lọc.'} />
+              </td></tr>
+            )}
             {filtered.map((e) => (
               <tr key={e.id}>
                 <td><span className={`tag ${e.type === 'income' ? 'green' : 'red'}`}>{e.type === 'income' ? 'THU' : 'CHI'}</span></td>
@@ -225,6 +247,7 @@ export default function Cashflow() {
                 )}
               </tr>
             ))}
+            </>}
           </tbody>
         </table>
       </div>

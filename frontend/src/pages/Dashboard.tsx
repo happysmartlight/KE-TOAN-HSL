@@ -118,7 +118,7 @@ export default function Dashboard() {
     </div>
   );
 
-  const { kpis, monthlyRevenue, cashflowByCategory, customerGrowth, topProducts, topCustomers } = data;
+  const { kpis, monthlyRevenue, cashflowByCategory, customerGrowth, topProducts, topCustomers, topStaff } = data;
 
   const RANK_DISPLAY = [
     { icon: '🥇', color: '#FFD700', bg: 'rgba(255,215,0,0.10)', border: 'rgba(255,215,0,0.30)' },
@@ -398,6 +398,43 @@ export default function Dashboard() {
         </ResponsiveContainer>
       </div>
 
+
+      {/* ── Top nhân viên KPI ── */}
+      {topStaff && topStaff.length > 0 && (
+        <div className="card mb-16">
+          <div className="card-title" style={{ color: '#bf00ff' }}>🏅 Top nhân viên tạo đơn hàng {year}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
+            {topStaff.map((s: any, i: number) => {
+              const STAFF_RANK = ['🥇', '🥈', '🥉'];
+              const STAFF_COLORS = ['#FFD700', '#C0C0C0', '#CD7F32'];
+              const isTop3 = i < 3;
+              const col = isTop3 ? STAFF_COLORS[i] : 'var(--text-dim)';
+              const maxRev = topStaff[0]?.totalRevenue || 1;
+              const pct = Math.round((s.totalRevenue / maxRev) * 100);
+              return (
+                <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 4,
+                  background: isTop3 ? `rgba(${i === 0 ? '255,215,0' : i === 1 ? '192,192,192' : '205,127,50'},0.06)` : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isTop3 ? `rgba(${i === 0 ? '255,215,0' : i === 1 ? '192,192,192' : '205,127,50'},0.2)` : 'rgba(255,255,255,0.04)'}`,
+                }}>
+                  <div style={{ fontSize: isTop3 ? 18 : 11, width: 22, textAlign: 'center', flexShrink: 0, color: isTop3 ? undefined : '#606080', fontWeight: 700 }}>
+                    {isTop3 ? STAFF_RANK[i] : `#${i + 1}`}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                    <div style={{ height: 3, background: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 4 }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: isTop3 ? col : 'var(--cyan)', borderRadius: 2, boxShadow: isTop3 ? `0 0 6px ${col}` : undefined }} />
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-bright)' }}>{(s.totalRevenue / 1_000_000).toFixed(1)}M ₫</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{s.invoiceCount} HĐ</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── HoloCard popup ── */}
       {cardData && (

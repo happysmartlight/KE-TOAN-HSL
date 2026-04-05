@@ -1,4 +1,6 @@
+import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
+import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import RequestDeleteModal from '../components/RequestDeleteModal';
@@ -7,6 +9,7 @@ import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
 import HoloCard, { getProductRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
+import EmptyState from '../components/EmptyState';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 const empty = { name: '', sku: '', unit: 'cái', costPrice: '', sellingPrice: '', stock: '', taxRate: '10%' };
@@ -27,7 +30,10 @@ export default function Products() {
   const [filter, setFilter] = useState<FilterState>({ ...defaultFilter, sortBy: 'sold', sortDir: 'desc' });
   const [cardData, setCardData] = useState<HoloData | null>(null);
 
-  const load = () => api.get('/products').then((r) => setRows(r.data));
+  useEscKey(cardData ? () => setCardData(null) : open ? () => setOpen(false) : null);
+
+  const [loading, setLoading] = useState(true);
+  const load = () => api.get('/products').then((r) => { setRows(r.data); setLoading(false); });
   useEffect(() => { load(); }, []);
 
   const filtered = useMemo(() => {
@@ -86,7 +92,7 @@ export default function Products() {
       setConfirmDelete(null);
       load();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Không thể xóa');
+      toast.error(err?.response?.data?.error || 'Không thể xóa');
     }
   };
 
@@ -148,12 +154,33 @@ export default function Products() {
         <table className="nt">
           <thead><tr><th>Tên SP</th><th>SKU</th><th>ĐVT</th><th>Giá vốn</th><th>Giá bán</th><th>VAT</th><th>Đã bán</th><th>Tồn kho</th><th></th></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={9}>{rows.length === 0 ? 'Chưa có sản phẩm' : 'Không tìm thấy kết quả'}</td></tr>}
+            {loading ? Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="skeleton-row">
+                <td><div className="skeleton w-lg"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+              </tr>
+            )) : <>
+            {filtered.length === 0 && (
+              <tr className="empty-row"><td colSpan={9}>
+                <EmptyState
+                  icon="📦"
+                  title={rows.length === 0 ? 'Chưa có sản phẩm' : 'Không tìm thấy kết quả'}
+                  description={rows.length === 0 ? 'Thêm sản phẩm đầu tiên để bắt đầu quản lý kho.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'}
+                />
+              </td></tr>
+            )}
             {filtered.map((p) => {
               const rank = getProductRank(p.totalRevenue ?? 0);
               return (
-              <tr key={p.id} style={rank ? { background: `${rank.color}08`, borderLeft: `2px solid ${rank.color}55` } : undefined}>
-                <td>
+              <tr key={p.id} style={rank ? { background: `${rank.color}08` } : undefined}>
+                <td style={rank ? { borderLeft: `2px solid ${rank.color}55` } : undefined}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {rank && <span title={rank.label} style={{ fontSize: 14, flexShrink: 0 }}>{rank.icon}</span>}
                     <div>
@@ -190,6 +217,7 @@ export default function Products() {
               </tr>
               );
             })}
+            </>}
           </tbody>
         </table>
       </div>

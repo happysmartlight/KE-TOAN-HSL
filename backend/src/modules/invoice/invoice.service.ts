@@ -17,7 +17,8 @@ type CreateInvoiceData = {
   invoiceDate?: string;
   totalAmountOverride?: number;
   initialPaid?: number;
-  skipInventory?: boolean; // true = không trừ tồn kho (import hồi tố)
+  skipInventory?: boolean;    // true = không trừ tồn kho (import hồi tố)
+  createdByUserId?: number;   // nhân viên tạo đơn
 };
 
 // Input từ frontend sau khi parse XML
@@ -35,7 +36,8 @@ export type XmlInvoiceInput = {
   buyerName: string;       // Ten — tên đơn vị/công ty mua
   buyerPersonName?: string; // HVTNMHang — họ tên người đại diện mua hàng
   buyerTax: string;
-  buyerAddress: string;    // DChi — dùng để phân biệt người trùng tên
+  buyerAddress: string;    // DChi — địa chỉ
+  buyerPhone?: string;     // SDThoai — số điện thoại
   grandTotal: number;      // TgTTTBSo — tổng có VAT
   initialPaid: number;
   skipInventory: boolean;
@@ -51,7 +53,10 @@ export type PreviewItem = {
   taxRate: string;
   productId: number | null;
   productName: string | null;
-  willCreate: boolean; // true = sẽ tự tạo product mới
+  willCreate: boolean;       // true = sẽ tự tạo product mới (không có trong DB)
+  batchNewProduct: boolean;  // true = tạo mới do chưa có TRONG BATCH (lần đầu)
+  // key của sản phẩm trong batch đã resolve lần đầu (nếu null = SP đã có trong DB hoặc lần đầu trong batch)
+  batchMergeProductKey?: string;
 };
 
 export type InvoicePreview = {
@@ -60,6 +65,8 @@ export type InvoicePreview = {
   buyerName: string;        // Ten — tên công ty
   buyerPersonName?: string; // HVTNMHang — tên người đại diện
   buyerTax: string;
+  buyerAddress?: string;
+  buyerPhone?: string;
   grandTotal: number;
   initialPaid: number;
   skipInventory: boolean;
@@ -91,6 +98,7 @@ export type ConfirmedXmlInvoice = {
   buyerPersonName?: string;   // HVTNMHang — tên người đại diện
   buyerTax?: string;
   buyerAddress?: string;
+  buyerPhone?: string;
   grandTotal: number;
   initialPaid: number;
   skipInventory: boolean;
@@ -142,7 +150,11 @@ async function autoCreateProduct(name: string, unit: string, sellingPrice: numbe
 export const invoiceService = {
   async getAll() {
     return prisma.invoice.findMany({
-      include: { customer: true, items: { include: { product: true } } },
+      include: {
+        customer: true,
+        items: { include: { product: true } },
+        createdByUser: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   },
@@ -159,6 +171,7 @@ export const invoiceService = {
     const {
       customerId, items, note, eInvoiceCode, invoiceDate,
       totalAmountOverride, initialPaid = 0, skipInventory = false,
+      createdByUserId,
     } = data;
 
     // Kiểm tra tồn kho (chỉ khi không bỏ qua)
@@ -187,6 +200,7 @@ export const invoiceService = {
           eInvoiceCode: eInvoiceCode || null,
           invoiceDate: invoiceDate ? new Date(invoiceDate) : null,
           customerId,
+          createdByUserId: createdByUserId || null,
           totalAmount,
           paidAmount: initialPaid,
           status: initialStatus,
@@ -258,11 +272,19 @@ export const invoiceService = {
       select: { id: true, name: true, companyName: true, taxCode: true, address: true },
     });
 
-    // Load products một lần (cần sellingPrice để match tên+giá)
+    // Load products một lần → build Map O(1) lookup: key = "norm(name):price"
     const products = await prisma.product.findMany({
       where: { status: 'active' },
-      select: { id: true, name: true, sellingPrice: true },
+      select: { id: true, name: true, sellingPrice: true, stock: true },
     });
+    // Map: "norm(name):price" → product (exact match — same name + same price = same product)
+    const productMap = new Map<string, typeof products[0]>();
+    for (const p of products) {
+      productMap.set(`${norm(p.name)}:${p.sellingPrice}`, p);
+    }
+    // Batch cache: products being created for the first time in this batch
+    // key = "norm(xmlName):unitPrice" → label (e.g. "✦ Tạo mới lần đầu trong batch")
+    const previewProductCache = new Map<string, string>(); // key → xmlName (display)
 
     // Kiểm tra eInvoiceCode đã tồn tại
     const existingCodes = await prisma.invoice.findMany({
@@ -339,24 +361,46 @@ export const invoiceService = {
         }
       }
 
-      // Match products: tên giống + giá giống = cùng SP; tên giống + giá khác = SP khác
+      // Match products O(1): tên + giá giống = cùng SP; tên giống giá khác = SP khác
       const previewItems: PreviewItem[] = input.items.map((item) => {
-        let found = products.find((p) =>
-          norm(p.name) === norm(item.xmlName) && p.sellingPrice === item.unitPrice
-        );
+        const pKey = `${norm(item.xmlName)}:${item.unitPrice}`;
+        // 1. Tìm trong DB (O(1) Map lookup)
+        let found = productMap.get(pKey);
+        // 2. Fallback: giá = 0 → match chỉ theo tên
         if (!found && item.unitPrice === 0) {
-          found = products.find((p) => norm(p.name) === norm(item.xmlName));
+          found = productMap.get(`${norm(item.xmlName)}:0`) ||
+                  [...productMap.values()].find((p) => norm(p.name) === norm(item.xmlName));
         }
-        if (!found) warnings.push(`Sản phẩm "${item.xmlName}" (${item.unitPrice.toLocaleString('vi-VN')} ₫) chưa có trong hệ thống → sẽ tự tạo mới`);
+
+        if (found) {
+          return {
+            xmlName: item.xmlName, unit: item.unit,
+            quantity: item.quantity, unitPrice: item.unitPrice, taxRate: item.taxRate,
+            productId: found.id, productName: found.name,
+            willCreate: false, batchNewProduct: false,
+          };
+        }
+
+        // 3. Không có trong DB — kiểm tra batch cache
+        if (previewProductCache.has(pKey)) {
+          // Đã gặp trong batch này → merge về cùng product sẽ được tạo
+          return {
+            xmlName: item.xmlName, unit: item.unit,
+            quantity: item.quantity, unitPrice: item.unitPrice, taxRate: item.taxRate,
+            productId: null, productName: null,
+            willCreate: true, batchNewProduct: false,
+            batchMergeProductKey: pKey,
+          };
+        }
+
+        // 4. Lần đầu xuất hiện trong batch + không có trong DB → sẽ tạo mới
+        previewProductCache.set(pKey, item.xmlName);
+        warnings.push(`Sản phẩm "${item.xmlName}" (${item.unitPrice.toLocaleString('vi-VN')} ₫) chưa có trong hệ thống → sẽ tự tạo mới`);
         return {
-          xmlName: item.xmlName,
-          unit: item.unit,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          taxRate: item.taxRate,
-          productId: found?.id ?? null,
-          productName: found?.name ?? null,
-          willCreate: !found,
+          xmlName: item.xmlName, unit: item.unit,
+          quantity: item.quantity, unitPrice: item.unitPrice, taxRate: item.taxRate,
+          productId: null, productName: null,
+          willCreate: true, batchNewProduct: true,
         };
       });
 
@@ -369,6 +413,8 @@ export const invoiceService = {
         buyerName:      input.buyerName,
         buyerPersonName: input.buyerPersonName,
         buyerTax:       input.buyerTax,
+        buyerAddress:   input.buyerAddress,
+        buyerPhone:     input.buyerPhone,
         grandTotal:     input.grandTotal,
         initialPaid:    input.initialPaid,
         skipInventory:  input.skipInventory,
@@ -385,7 +431,7 @@ export const invoiceService = {
   },
 
   // ── Batch commit (write DB) ─────────────────────────────────────────────────
-  async batchCreate(confirmed: ConfirmedXmlInvoice[]): Promise<{ success: number[]; failed: { index: number; eInvoiceCode: string; error: string }[] }> {
+  async batchCreate(confirmed: ConfirmedXmlInvoice[], createdByUserId?: number): Promise<{ success: number[]; failed: { index: number; eInvoiceCode: string; error: string }[] }> {
     const success: number[] = [];
     const failed: { index: number; eInvoiceCode: string; error: string }[] = [];
 
@@ -430,6 +476,22 @@ export const invoiceService = {
 
             if (existingCustomer) {
               customerId = existingCustomer.id;
+              // Auto-update address & phone từ HĐĐT (nguồn chính thức)
+              // Nếu tìm được bằng MST → luôn update; bằng tên → chỉ update nếu DB đang trống
+              const updateData: Record<string, string> = {};
+              if (inv.buyerTax) {
+                // Matched by MST — update unconditionally
+                if (inv.buyerAddress) updateData.address = inv.buyerAddress;
+                if (inv.buyerPhone)   updateData.phone   = inv.buyerPhone;
+              } else {
+                // Matched by name — chỉ fill vào fields đang rỗng
+                const existing = await prisma.customer.findUnique({ where: { id: customerId }, select: { address: true, phone: true } });
+                if (!existing?.address && inv.buyerAddress) updateData.address = inv.buyerAddress;
+                if (!existing?.phone   && inv.buyerPhone)   updateData.phone   = inv.buyerPhone;
+              }
+              if (Object.keys(updateData).length > 0) {
+                await prisma.customer.update({ where: { id: customerId }, data: updateData });
+              }
             } else {
               // 3. Thực sự chưa có — tạo mới
               const rawName = inv.buyerPersonName || inv.buyerName || '';
@@ -441,6 +503,7 @@ export const invoiceService = {
                   companyName: inv.buyerName || null,
                   taxCode: inv.buyerTax || null,
                   address: inv.buyerAddress || null,
+                  phone:   inv.buyerPhone   || null,
                 },
               });
               customerId = newCustomer.id;
@@ -489,6 +552,7 @@ export const invoiceService = {
           totalAmountOverride: inv.grandTotal,
           initialPaid: inv.initialPaid,
           skipInventory: inv.skipInventory,
+          createdByUserId,
         });
         success.push(invoice.id);
       } catch (err: any) {

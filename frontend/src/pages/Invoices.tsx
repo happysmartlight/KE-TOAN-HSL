@@ -1,8 +1,11 @@
+import EmptyState from '../components/EmptyState';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import SearchSelect from '../components/SearchSelect';
+import { toast } from '../components/Toast';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
 
@@ -34,6 +37,7 @@ type XmlPreview = {
   buyerPersonName: string;  // HVTNMHang — tên người đại diện
   buyerTax: string;
   buyerAddress: string;
+  buyerPhone: string;       // SDThoai — số điện thoại
   xmlItems: XmlItem[];
   preTaxTotal: number;
   vatTotal: number;
@@ -46,13 +50,16 @@ type XmlPreview = {
 type BatchPreviewItem = {
   xmlName: string; unit: string; quantity: number;
   unitPrice: number; taxRate: string;
-  productId: number | null; productName: string | null; willCreate: boolean;
+  productId: number | null; productName: string | null;
+  willCreate: boolean;
+  batchNewProduct: boolean;       // true = tạo mới (lần đầu trong batch, chưa có trong DB)
+  batchMergeProductKey?: string;  // defined = sẽ merge vào SP đã xuất hiện trước trong batch
 };
 type BatchPreview = {
   eInvoiceCode: string; invoiceDate: string;
   buyerName: string;        // Ten — tên công ty
   buyerPersonName?: string; // HVTNMHang — tên người đại diện
-  buyerTax: string; buyerAddress: string;
+  buyerTax: string; buyerAddress: string; buyerPhone?: string;
   grandTotal: number; initialPaid: number; skipInventory: boolean;
   customerId: number | null; customerName: string | null;
   items: BatchPreviewItem[];
@@ -75,6 +82,7 @@ function parseXMLInvoice(xmlText: string): Omit<XmlPreview, 'customerId' | 'paid
   const buyerPersonName = nMua ? t(nMua, 'HVTNMHang') : '';   // tên người đại diện
   const buyerTax       = nMua ? t(nMua, 'MST') : '';
   const buyerAddress   = nMua ? t(nMua, 'DChi') : '';
+  const buyerPhone     = nMua ? (t(nMua, 'SDThoai') || t(nMua, 'DThoai') || t(nMua, 'SoDienThoai')) : '';
 
   const xmlItems: XmlItem[] = Array.from(doc.getElementsByTagName('HHDVu')).map(el => ({
     xmlName:   t(el, 'THHDVu'),
@@ -89,7 +97,7 @@ function parseXMLInvoice(xmlText: string): Omit<XmlPreview, 'customerId' | 'paid
   const vatTotal    = Number(t(doc, 'TgTThue'))  || 0;
   const grandTotal  = Number(t(doc, 'TgTTTBSo')) || 0;
 
-  return { invoiceDate, eInvoiceCode, buyerName, buyerPersonName, buyerTax, buyerAddress, xmlItems, preTaxTotal, vatTotal, grandTotal };
+  return { invoiceDate, eInvoiceCode, buyerName, buyerPersonName, buyerTax, buyerAddress, buyerPhone, xmlItems, preTaxTotal, vatTotal, grandTotal };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -129,6 +137,14 @@ export default function Invoices() {
   const [batchResult, setBatchResult]       = useState<{ success: number; failed: { eInvoiceCode: string; error: string }[] } | null>(null);
   const [batchSkipInventory, setBatchSkipInventory] = useState(true);
   const [expandedRows, setExpandedRows]     = useState<Set<number>>(new Set());
+
+  // ESC: đóng modal/panel trong → ngoài (sau tất cả useState)
+  useEscKey(
+    detailInv       ? () => setDetailInv(null) :
+    payModal        ? () => { setPayModal(null); setPayAmount(''); } :
+    showNewCustomer ? () => setShowNewCustomer(false) :
+    open            ? () => setOpen(false) : null
+  );
 
   const loadCustomers = () => api.get('/customers').then((r) => setCustomers(r.data));
   const load = () => api.get('/invoices').then((r) => setRows(r.data));
@@ -174,13 +190,13 @@ export default function Invoices() {
   };
 
   const saveNewCustomer = async () => {
-    if (!newCustomer.name.trim()) { alert('Vui lòng nhập tên khách hàng'); return; }
+    if (!newCustomer.name.trim()) { toast.warn('Vui lòng nhập tên khách hàng'); return; }
     try {
       const { data } = await api.post('/customers', newCustomer);
       await loadCustomers();
       setCustomerId(String(data.id));
       setShowNewCustomer(false); setNewCustomer(emptyNewCustomer); setNcTaxError('');
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi thêm khách hàng'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi thêm khách hàng'); }
   };
 
   // ── Submit regular invoice ─────────────────────────────────────────────────
@@ -201,7 +217,7 @@ export default function Invoices() {
       setItems([{ productId: '', quantity: 1, price: 0, taxRate: '10%' }]);
       setCustomerId(''); setNote(''); setShowNewCustomer(false);
       load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
   // ── Payment ────────────────────────────────────────────────────────────────
@@ -209,17 +225,17 @@ export default function Invoices() {
     try {
       await api.post('/payments', { invoiceId: payModal.id, amount: Number(payAmount) });
       setPayModal(null); setPayAmount(''); load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
   // ── Cancel / Delete ────────────────────────────────────────────────────────
   const doCancel = async (inv: any) => {
     try { await api.patch(`/invoices/${inv.id}/cancel`); setConfirmModal(null); load(); }
-    catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi hủy'); }
+    catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi hủy'); }
   };
   const doDelete = async (inv: any) => {
     try { await api.delete(`/invoices/${inv.id}`); setConfirmModal(null); load(); }
-    catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi xóa'); }
+    catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi xóa'); }
   };
 
   // ── XML import ─────────────────────────────────────────────────────────────
@@ -259,7 +275,7 @@ export default function Invoices() {
           customerId: autoMatchCustomer(parsed.buyerTax, parsed.buyerName),
           paidAmount: '0',
         });
-      } catch { alert('Không đọc được file XML. Kiểm tra lại format.'); }
+      } catch { toast.error('Không đọc được file XML. Kiểm tra lại format.'); }
     };
     reader.readAsText(file);
     e.target.value = '';
@@ -267,10 +283,10 @@ export default function Invoices() {
 
   const submitXmlImport = async () => {
     if (!xmlModal) return;
-    if (!xmlModal.customerId) { alert('Vui lòng chọn khách hàng'); return; }
+    if (!xmlModal.customerId) { toast.warn('Vui lòng chọn khách hàng'); return; }
     const unmatched = xmlModal.xmlItems.filter((i) => !i.productId);
     if (unmatched.length > 0) {
-      alert(`${unmatched.length} sản phẩm chưa được khớp:\n${unmatched.map((i) => `• ${i.xmlName}`).join('\n')}\n\nVui lòng chọn sản phẩm tương ứng.`);
+      toast.warn(`${unmatched.length} sản phẩm chưa khớp: ${unmatched.map((i) => i.xmlName).join(', ')} — vui lòng chọn sản phẩm tương ứng.`);
       return;
     }
     try {
@@ -288,7 +304,7 @@ export default function Invoices() {
         })),
       });
       setXmlModal(null); load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi khi nhập hóa đơn'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi nhập hóa đơn'); }
   };
 
   // ── Batch XML import ───────────────────────────────────────────────────────
@@ -312,6 +328,7 @@ export default function Invoices() {
               buyerPersonName: p.buyerPersonName,
               buyerTax:       p.buyerTax,
               buyerAddress:   p.buyerAddress,
+              buyerPhone:     p.buyerPhone,
               grandTotal:     p.grandTotal,
               initialPaid:    0,
               skipInventory:  batchSkipInventory,
@@ -324,7 +341,7 @@ export default function Invoices() {
     ));
 
     const valid = parsed.filter(Boolean);
-    if (!valid.length) { setBatchLoading(false); alert('Không đọc được file XML nào.'); return; }
+    if (!valid.length) { setBatchLoading(false); toast.error('Không đọc được file XML nào.'); return; }
 
     try {
       const { data } = await api.post('/invoices/xml-preview', { invoices: valid });
@@ -334,7 +351,7 @@ export default function Invoices() {
         paidAmount: String(p.grandTotal), // mặc định 100%
       })));
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Lỗi khi preview');
+      toast.error(err?.response?.data?.error || 'Lỗi khi preview');
     } finally { setBatchLoading(false); }
   };
 
@@ -342,7 +359,7 @@ export default function Invoices() {
     if (!batchPreviews) return;
     // Cho phép customerId = null → backend sẽ tự tạo customer mới
     const selected = batchPreviews.filter((p) => p.selected && !p.isDuplicate);
-    if (!selected.length) { alert('Không có hóa đơn nào hợp lệ được chọn.'); return; }
+    if (!selected.length) { toast.warn('Không có hóa đơn nào hợp lệ được chọn.'); return; }
 
     setBatchLoading(true);
     try {
@@ -355,6 +372,7 @@ export default function Invoices() {
           buyerPersonName: p.buyerPersonName,
           buyerTax:       p.buyerTax,
           buyerAddress:   p.buyerAddress,
+          buyerPhone:     p.buyerPhone,
           grandTotal:     p.grandTotal,
           initialPaid:    Number(p.paidAmount) || 0,
           skipInventory:  p.skipInventory,
@@ -372,7 +390,7 @@ export default function Invoices() {
       setBatchPreviews(null);
       load();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Lỗi khi import batch');
+      toast.error(err?.response?.data?.error || 'Lỗi khi import batch');
     } finally { setBatchLoading(false); }
   };
 
@@ -574,7 +592,12 @@ export default function Invoices() {
         <table className="nt">
           <thead><tr><th>Mã HĐ</th><th>Ngày lập</th><th>Khách hàng</th><th>Tổng tiền</th><th>Đã thu</th><th>Còn nợ</th><th>Trạng thái</th><th></th></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={8}>{rows.length === 0 ? 'Chưa có hóa đơn' : 'Không tìm thấy kết quả'}</td></tr>}
+            {filtered.length === 0 && (
+              <tr className="empty-row"><td colSpan={8}>
+                <EmptyState icon="🧾" title={rows.length === 0 ? 'Chưa có hóa đơn' : 'Không tìm thấy kết quả'}
+                  description={rows.length === 0 ? 'Tạo hóa đơn đầu tiên hoặc import XML.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'} />
+              </td></tr>
+            )}
 
             {filtered.map((inv) => {
               const s = STATUS[inv.status] || STATUS.unpaid;
@@ -588,6 +611,7 @@ export default function Invoices() {
                   </td>
                   <td style={isCancelled ? { opacity: 0.45 } : {}}>
                     {fmtDate(inv.invoiceDate ?? inv.createdAt)}
+                    {inv.createdByUser && <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>👤 {inv.createdByUser.name}</div>}
                   </td>
                   <td style={isCancelled ? { opacity: 0.45 } : {}}>
                     <div className="c-bright">{inv.customer?.name}</div>
@@ -952,20 +976,22 @@ export default function Invoices() {
                             </div>
                           </td>
                           <td>
-                            {p.isDuplicate
-                              ? <span className="tag red" style={{ fontSize: 10 }}>Đã tồn tại</span>
-                              : p.batchMergeIndex !== undefined
-                                ? p.items.some((it) => it.willCreate)
-                                  ? <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH · Tạo SP mới</span>
-                                  : <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH (batch #{p.batchMergeIndex + 1})</span>
-                                : !p.customerId && p.items.some((it) => it.willCreate)
-                                  ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo KH+SP mới</span>
-                                  : !p.customerId
-                                    ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo KH mới</span>
-                                    : p.items.some((it) => it.willCreate)
-                                      ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo SP mới</span>
-                                      : <span className="tag green" style={{ fontSize: 10 }}>Sẵn sàng</span>
-                            }
+                            {(() => {
+                              if (p.isDuplicate) return <span className="tag red" style={{ fontSize: 10 }}>Đã tồn tại</span>;
+                              const hasMergeKH  = p.batchMergeIndex !== undefined;
+                              const hasNewKH    = !p.customerId && !hasMergeKH;
+                              const hasNewSP    = p.items.some((it) => it.willCreate && it.batchNewProduct);
+                              const hasMergeSP  = p.items.some((it) => it.batchMergeProductKey);
+                              if (hasMergeKH && hasNewSP)  return <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH · ✦ SP mới</span>;
+                              if (hasMergeKH && hasMergeSP) return <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH+SP (batch)</span>;
+                              if (hasMergeKH)               return <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH #{p.batchMergeIndex! + 1}</span>;
+                              if (hasNewKH  && hasNewSP)   return <span className="tag yellow" style={{ fontSize: 10 }}>✦ Tạo KH+SP mới</span>;
+                              if (hasNewKH)                 return <span className="tag yellow" style={{ fontSize: 10 }}>✦ Tạo KH mới</span>;
+                              if (hasMergeSP && hasNewSP)  return <span className="tag yellow" style={{ fontSize: 10 }}>↗ Merge SP · ✦ Tạo SP mới</span>;
+                              if (hasMergeSP)               return <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge SP (batch)</span>;
+                              if (hasNewSP)                 return <span className="tag yellow" style={{ fontSize: 10 }}>✦ Tạo SP mới</span>;
+                              return <span className="tag green" style={{ fontSize: 10 }}>✓ Sẵn sàng</span>;
+                            })()}
                           </td>
                           <td>
                             <button className="btn ghost btn-sm" style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => toggleExpandRow(i)}>
@@ -1001,9 +1027,11 @@ export default function Invoices() {
                                       <td style={{ padding: '3px 6px', textAlign: 'right' }} className="c-bright">{fmt(item.unitPrice)}</td>
                                       <td style={{ padding: '3px 6px', textAlign: 'center' }} className="c-yellow">{item.taxRate}</td>
                                       <td style={{ padding: '3px 6px' }}>
-                                        {item.willCreate
-                                          ? <span className="c-yellow">✦ Tạo mới: "{item.xmlName}"</span>
-                                          : <span className="c-green">✓ {item.productName}</span>
+                                        {!item.willCreate
+                                          ? <span className="c-green">✓ {item.productName}</span>
+                                          : item.batchMergeProductKey
+                                            ? <span style={{ color: 'var(--cyan)' }}>↗ Merge SP (batch)</span>
+                                            : <span className="c-yellow">✦ Tạo mới: "{item.xmlName}"</span>
                                         }
                                       </td>
                                     </tr>

@@ -8,16 +8,25 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  name      String
-  role      String   @default("staff") // admin | staff
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               Int       @id @default(autoincrement())
+  username         String    @unique
+  password         String
+  name             String
+  role             String    @default("staff") // admin | staff
+  email            String?
+  phone            String?
+  startDate        DateTime? // Ngày bắt đầu chu kỳ làm việc hiện tại
+  endDate          DateTime? // Ngày kết thúc chu kỳ hiện tại (null = đang làm)
+  employmentStatus String    @default("active") // active | resigned
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  deleteRequestsMade     DeleteRequest[] @relation("Requester")
-  deleteRequestsReviewed DeleteRequest[] @relation("Reviewer")
+  deleteRequestsMade     DeleteRequest[]        @relation("Requester")
+  deleteRequestsReviewed DeleteRequest[]        @relation("Reviewer")
+  profileUpdateRequests  ProfileUpdateRequest[] @relation("PRRequester")
+  reviewedProfileUpdates ProfileUpdateRequest[] @relation("PRReviewer")
+  employmentCycles       EmploymentCycle[]
+  createdInvoices        Invoice[]              @relation("InvoiceCreator")
 }
 
 model Customer {
@@ -74,20 +83,22 @@ model Product {
 }
 
 model Invoice {
-  id           Int           @id @default(autoincrement())
-  code         String        @unique // VD: INV-2024-001
-  eInvoiceCode String?       // Mã HĐĐT từ file XML (VD: C25TSL-2)
-  invoiceDate  DateTime?     // Ngày lập trên hóa đơn (có thể khác ngày nhập)
-  customerId   Int
-  customer     Customer      @relation(fields: [customerId], references: [id])
-  status       String        @default("unpaid") // unpaid | partial | paid
-  totalAmount  Float         @default(0)
-  paidAmount   Float         @default(0)
-  note         String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  items        InvoiceItem[]
-  payments     Payment[]
+  id              Int           @id @default(autoincrement())
+  code            String        @unique // VD: INV-2024-001
+  eInvoiceCode    String?       // Mã HĐĐT từ file XML (VD: C25TSL-2)
+  invoiceDate     DateTime?     // Ngày lập trên hóa đơn (có thể khác ngày nhập)
+  customerId      Int
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  createdByUserId Int?          // Nhân viên tạo đơn
+  createdByUser   User?         @relation("InvoiceCreator", fields: [createdByUserId], references: [id])
+  status          String        @default("unpaid") // unpaid | partial | paid
+  totalAmount     Float         @default(0)
+  paidAmount      Float         @default(0)
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  items           InvoiceItem[]
+  payments        Payment[]
 }
 
 model InvoiceItem {
@@ -207,4 +218,29 @@ model CashflowCategory {
   isBuiltin Boolean  @default(false)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model ProfileUpdateRequest {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  user          User      @relation("PRRequester", fields: [userId], references: [id])
+  requestedData String    // JSON: { name?, email?, phone? }
+  reason        String?
+  status        String    @default("pending") // pending | approved | rejected
+  adminNote     String?
+  reviewerId    Int?
+  reviewer      User?     @relation("PRReviewer", fields: [reviewerId], references: [id])
+  reviewedAt    DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+model EmploymentCycle {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  cycleNo   Int       @default(1) // Chu kỳ 1, 2, 3...
+  startDate DateTime
+  endDate   DateTime? // null = đang trong chu kỳ này
+  note      String?
+  createdAt DateTime  @default(now())
 }

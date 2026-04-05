@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface Props {
   title: string;
@@ -31,6 +31,18 @@ export default function ConfirmModal({
   const typedOk = !typeToConfirm || typed === typeToConfirm;
   const passwordOk = !requirePassword || password.length > 0;
   const canConfirm = typedOk && passwordOk;
+
+  // ESC → hủy, ENTER → xác nhận (nếu đủ điều kiện)
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onCancel(); return; }
+      if (e.key === 'Enter' && canConfirm && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        onConfirm(requirePassword ? password : undefined);
+      }
+    };
+    document.addEventListener('keydown', fn);
+    return () => document.removeEventListener('keydown', fn);
+  }, [canConfirm, password, requirePassword, onConfirm, onCancel]);
 
   return (
     <div className="modal-bg" onClick={onCancel}>

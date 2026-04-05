@@ -26,7 +26,7 @@ export const invoiceController = {
       if (!customerId || !items || items.length === 0) {
         return res.status(400).json({ error: 'Thiếu thông tin hóa đơn' });
       }
-      const invoice = await invoiceService.create({ customerId, items, note, eInvoiceCode, invoiceDate, totalAmountOverride, initialPaid });
+      const invoice = await invoiceService.create({ customerId, items, note, eInvoiceCode, invoiceDate, totalAmountOverride, initialPaid, createdByUserId: (req as any).user?.id });
       res.status(201).json(invoice);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -54,7 +54,7 @@ export const invoiceController = {
       if (!Array.isArray(invoices) || invoices.length === 0) {
         return res.status(400).json({ error: 'Cần ít nhất 1 hóa đơn để import' });
       }
-      const result = await invoiceService.batchCreate(invoices);
+      const result = await invoiceService.batchCreate(invoices, (req as any).user?.id);
       res.status(201).json(result);
     } catch (err: any) {
       res.status(400).json({ error: err.message });

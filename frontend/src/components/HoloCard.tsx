@@ -1,7 +1,7 @@
 import { CSSProperties } from 'react';
 
 export interface HoloData {
-  type: 'customer' | 'supplier' | 'product';
+  type: 'customer' | 'supplier' | 'product' | 'user';
   id: number;
   name: string;
   createdAt: string;
@@ -26,35 +26,73 @@ export interface HoloData {
   stock?: number;
   totalSold?: number;
   totalRevenue?: number;
+  // User
+  username?: string;
+  role?: string;
+  startDate?: string;
+  endDate?: string;
+  employmentStatus?: string;
 }
 
-// ── Rank system ───────────────────────────────────────────────────────────────
-export const CUSTOMER_RANKS = [
+// ── Rank tier type ────────────────────────────────────────────────────────────
+export type RankTier = {
+  label: string;
+  min: number;
+  icon: string;
+  color: string;
+  glow: string;
+};
+
+// ── Default ranks ─────────────────────────────────────────────────────────────
+const DEFAULT_RANKS: RankTier[] = [
   { label: 'THÁCH ĐẤU', min: 50_000_000, icon: '⚔️',  color: '#ff2244', glow: '#ff003344' },
   { label: 'KIM CƯƠNG',  min: 20_000_000, icon: '💎',  color: '#00d4ff', glow: '#00aaff44' },
   { label: 'BẠCH KIM',   min: 10_000_000, icon: '🔮',  color: '#bf80ff', glow: '#9944ff44' },
   { label: 'VÀNG',       min:  5_000_000, icon: '⭐',  color: '#ffcc00', glow: '#ffaa0044' },
-] as const;
+];
 
-export function getCustomerRank(totalPurchased: number) {
-  return CUSTOMER_RANKS.find((r) => totalPurchased >= r.min) ?? null;
+// Per-group mutable rank arrays — updated via setRankConfig()
+let _customerRanks: RankTier[] = [...DEFAULT_RANKS];
+let _supplierRanks: RankTier[] = [...DEFAULT_RANKS];
+let _productRanks:  RankTier[] = [...DEFAULT_RANKS];
+let _userRanks:     RankTier[] = [...DEFAULT_RANKS];
+
+export type RankConfigMap = {
+  customer?: RankTier[];
+  supplier?: RankTier[];
+  product?:  RankTier[];
+  user?:     RankTier[];
+};
+
+/** Called by App.tsx after fetching admin rank config */
+export function setRankConfig(cfg: RankConfigMap) {
+  if (cfg.customer?.length) _customerRanks = [...cfg.customer];
+  if (cfg.supplier?.length) _supplierRanks = [...cfg.supplier];
+  if (cfg.product?.length)  _productRanks  = [...cfg.product];
+  if (cfg.user?.length)     _userRanks     = [...cfg.user];
 }
 
-// Supplier dùng cùng ngưỡng, đo theo tổng đơn mua
-export { CUSTOMER_RANKS as SUPPLIER_RANKS };
-export function getSupplierRank(totalOrdered: number) {
-  return CUSTOMER_RANKS.find((r) => totalOrdered >= r.min) ?? null;
-}
+// ── Rank system ───────────────────────────────────────────────────────────────
+export const CUSTOMER_RANKS = DEFAULT_RANKS; // kept for backward compat
+export { DEFAULT_RANKS as SUPPLIER_RANKS };
 
-// Product rank theo tổng doanh thu bán được
-export function getProductRank(totalRevenue: number) {
-  return CUSTOMER_RANKS.find((r) => totalRevenue >= r.min) ?? null;
+export function getCustomerRank(v: number): RankTier | null {
+  return _customerRanks.find((r) => v >= r.min) ?? null;
+}
+export function getSupplierRank(v: number): RankTier | null {
+  return _supplierRanks.find((r) => v >= r.min) ?? null;
+}
+export function getProductRank(v: number): RankTier | null {
+  return _productRanks.find((r) => v >= r.min) ?? null;
+}
+export function getUserRank(v: number): RankTier | null {
+  return _userRanks.find((r) => v >= r.min) ?? null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 const fmt  = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
-const fmtD = (d: string) => new Date(d).toLocaleDateString('vi-VN');
+const fmtD = (d?: string) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
 function getTheme(data: HoloData) {
   if (data.type === 'customer') {
@@ -81,6 +119,18 @@ function getTheme(data: HoloData) {
       color1: rank?.color ?? typeColor,
       icon: '🏭', typeLabel: 'NHÀ CUNG CẤP',
       badge: typeLabel2, badgeColor: typeColor, rank,
+    };
+  }
+  if (data.type === 'user') {
+    const rank     = getUserRank(data.totalRevenue ?? 0);
+    const resigned = data.employmentStatus === 'resigned';
+    return {
+      color1:     rank?.color ?? (resigned ? '#505070' : '#00f5ff'),
+      icon:       data.role === 'admin' ? '🛡️' : '🧑‍💼',
+      typeLabel:  'NHÂN SỰ',
+      badge:      resigned ? 'Đã nghỉ' : 'Đang làm',
+      badgeColor: resigned ? '#ff5577' : '#00ff88',
+      rank,
     };
   }
   // product
@@ -116,7 +166,7 @@ export default function HoloCard({ data }: { data: HoloData }) {
         <div className="hcard-sub">— {data.companyName}</div>
       )}
 
-      {/* Rank banner — customer, supplier, product */}
+      {/* Rank banner */}
       {theme.rank && (
         <div
           className="hcard-rank"
@@ -129,7 +179,12 @@ export default function HoloCard({ data }: { data: HoloData }) {
           <span className="hcard-rank-icon">{theme.rank.icon}</span>
           <div style={{ flex: 1 }}>
             <div className="hcard-rank-label">{theme.rank.label}</div>
-            <div className="hcard-rank-sub">Top khách hàng</div>
+            <div className="hcard-rank-sub">
+              {data.type === 'supplier' ? 'Top nhà cung cấp' :
+               data.type === 'product'  ? 'Top sản phẩm' :
+               data.type === 'user'     ? 'Top nhân viên' :
+               'Top khách hàng'}
+            </div>
           </div>
           <span className="hcard-rank-trophy">🏆</span>
         </div>
@@ -169,6 +224,17 @@ export default function HoloCard({ data }: { data: HoloData }) {
           <HRow label="Tồn kho"   value={`${data.stock ?? 0} ${data.unit || ''}`} color={theme.badgeColor} />
           <HRow label="Đã bán"    value={`${(data.totalSold ?? 0).toLocaleString('vi-VN')} ${data.unit || ''}`} color={theme.color1} />
           <HRow label="Doanh thu" value={fmt(data.totalRevenue ?? 0)} color={theme.color1} />
+        </>}
+
+        {data.type === 'user' && <>
+          <HRow label="Username"  value={data.username || '—'} />
+          <HRow label="Vai trò"   value={data.role === 'admin' ? 'Admin' : 'Nhân viên'} color={data.role === 'admin' ? '#bf80ff' : '#00f5ff'} />
+          <HRow label="SĐT"       value={data.phone || '—'} />
+          <HRow label="Email"     value={data.email || '—'} />
+          <HRow label="Vào làm"   value={fmtD(data.startDate)} />
+          {data.endDate && <HRow label="Nghỉ việc" value={fmtD(data.endDate)} color="#ff5577" />}
+          <HRow label="Doanh thu" value={fmt(data.totalRevenue ?? 0)} color={theme.color1} />
+          <HRow label="Hóa đơn"  value={`${data.invoiceCount ?? 0} HĐ`} />
         </>}
 
         <HRow label="Ngày thêm" value={fmtD(data.createdAt)} />

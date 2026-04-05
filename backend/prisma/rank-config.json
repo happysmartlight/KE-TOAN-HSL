@@ -1,0 +1,122 @@
+{
+  "customer": [
+    {
+      "label": "THÁCH ĐẤU",
+      "min": 100000000,
+      "icon": "⚔️",
+      "color": "#ff2244",
+      "glow": "#ff003344"
+    },
+    {
+      "label": "KIM CƯƠNG",
+      "min": 40000000,
+      "icon": "💎",
+      "color": "#00d4ff",
+      "glow": "#00aaff44"
+    },
+    {
+      "label": "BẠCH KIM",
+      "min": 20000000,
+      "icon": "🔮",
+      "color": "#bf80ff",
+      "glow": "#9944ff44"
+    },
+    {
+      "label": "VÀNG",
+      "min": 10000000,
+      "icon": "⭐",
+      "color": "#ffcc00",
+      "glow": "#ffaa0044"
+    }
+  ],
+  "supplier": [
+    {
+      "label": "THÁCH ĐẤU",
+      "min": 50000000,
+      "icon": "⚔️",
+      "color": "#ff2244",
+      "glow": "#ff003344"
+    },
+    {
+      "label": "KIM CƯƠNG",
+      "min": 20000000,
+      "icon": "💎",
+      "color": "#00d4ff",
+      "glow": "#00aaff44"
+    },
+    {
+      "label": "BẠCH KIM",
+      "min": 10000000,
+      "icon": "🔮",
+      "color": "#bf80ff",
+      "glow": "#9944ff44"
+    },
+    {
+      "label": "VÀNG",
+      "min": 5000000,
+      "icon": "⭐",
+      "color": "#ffcc00",
+      "glow": "#ffaa0044"
+    }
+  ],
+  "product": [
+    {
+      "label": "THÁCH ĐẤU",
+      "min": 50000000,
+      "icon": "⚔️",
+      "color": "#ff2244",
+      "glow": "#ff003344"
+    },
+    {
+      "label": "KIM CƯƠNG",
+      "min": 20000000,
+      "icon": "💎",
+      "color": "#00d4ff",
+      "glow": "#00aaff44"
+    },
+    {
+      "label": "BẠCH KIM",
+      "min": 10000000,
+      "icon": "🔮",
+      "color": "#bf80ff",
+      "glow": "#9944ff44"
+    },
+    {
+      "label": "VÀNG",
+      "min": 5000000,
+      "icon": "⭐",
+      "color": "#ffcc00",
+      "glow": "#ffaa0044"
+    }
+  ],
+  "user": [
+    {
+      "label": "THÁCH ĐẤU",
+      "min": 50000000,
+      "icon": "⚔️",
+      "color": "#ff2244",
+      "glow": "#ff003344"
+    },
+    {
+      "label": "KIM CƯƠNG",
+      "min": 20000000,
+      "icon": "💎",
+      "color": "#00d4ff",
+      "glow": "#00aaff44"
+    },
+    {
+      "label": "BẠCH KIM",
+      "min": 10000000,
+      "icon": "🔮",
+      "color": "#bf80ff",
+      "glow": "#9944ff44"
+    },
+    {
+      "label": "VÀNG",
+      "min": 5000000,
+      "icon": "⭐",
+      "color": "#ffcc00",
+      "glow": "#ffaa0044"
+    }
+  ]
+}

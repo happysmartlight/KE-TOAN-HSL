@@ -7,5 +7,12 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',   // expose on LAN so mobile can access dev server
     port: 5173,
+    proxy: {
+      // Mọi request /api/* trong dev → forward tới backend port 3001
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
+    },
   },
 })

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api';
 import ConfirmModal from '../components/ConfirmModal';
-import type { AxiosProgressEvent } from 'axios';
+import { toast } from '../components/Toast';
 
 type Stats = {
   customers: number; suppliers: number; products: number;
@@ -10,6 +10,7 @@ type Stats = {
   payments: number; supplierPayments: number;
   cashflow: number; inventoryLogs: number; logs: number; deleteRequests: number;
 };
+
 
 type GroupKey = 'customers' | 'suppliers' | 'products' | 'invoices' | 'purchases' | 'cashflow' | 'logs';
 
@@ -96,12 +97,7 @@ export default function SystemAdmin() {
 
   const [confirmGroup, setConfirmGroup] = useState<GroupDef | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
 
-  const restoreRef = useRef<HTMLInputElement>(null);
-  const [restoring, setRestoring] = useState(false);
-  const [restoreProgress, setRestoreProgress] = useState(0);
 
   const loadStats = async () => {
     setLoading(true);
@@ -115,19 +111,14 @@ export default function SystemAdmin() {
 
   useEffect(() => { loadStats(); }, []);
 
-  const flash = (msg: string, isErr = false) => {
-    if (isErr) { setErrorMsg(msg); setTimeout(() => setErrorMsg(''), 4000); }
-    else       { setSuccessMsg(msg); setTimeout(() => setSuccessMsg(''), 4000); }
-  };
-
   const doDeleteGroup = async (group: GroupKey, password: string) => {
     setBusy(true);
     try {
       await api.delete(`/admin/purge/${group}`, { data: { password } });
-      flash(`Đã xóa sạch nhóm: ${GROUPS.find((g) => g.key === group)?.label}`);
+      toast.success(`Đã xóa sạch nhóm: ${GROUPS.find((g) => g.key === group)?.label}`);
       await loadStats();
     } catch (err: any) {
-      flash(err.response?.data?.error || 'Lỗi khi xóa', true);
+      toast.error(err.response?.data?.error || 'Lỗi khi xóa');
     } finally {
       setBusy(false);
       setConfirmGroup(null);
@@ -138,41 +129,16 @@ export default function SystemAdmin() {
     setBusy(true);
     try {
       await api.delete('/admin/purge-all', { data: { password } });
-      flash('Đã xóa toàn bộ dữ liệu nghiệp vụ. Hệ thống sạch.');
+      toast.success('Đã xóa toàn bộ dữ liệu nghiệp vụ. Hệ thống sạch.');
       await loadStats();
     } catch (err: any) {
-      flash(err.response?.data?.error || 'Lỗi khi xóa', true);
+      toast.error(err.response?.data?.error || 'Lỗi khi xóa');
     } finally {
       setBusy(false);
       setConfirmAll(false);
     }
   };
 
-  const doRestore = async (file: File) => {
-    if (!file.name.endsWith('.db')) {
-      flash('Chỉ chấp nhận file .db', true);
-      return;
-    }
-    const formData = new FormData();
-    formData.append('db', file);
-    setRestoring(true);
-    setRestoreProgress(0);
-    try {
-      await api.post('/admin/restore', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-        onUploadProgress: (e: AxiosProgressEvent) => {
-          if (e.total) setRestoreProgress(Math.round((e.loaded / e.total) * 100));
-        },
-      });
-      flash('Khôi phục thành công! Vui lòng tải lại trang để áp dụng dữ liệu mới.');
-    } catch (err: any) {
-      flash(err.response?.data?.error || 'Lỗi khi restore', true);
-    } finally {
-      setRestoring(false);
-      setRestoreProgress(0);
-      if (restoreRef.current) restoreRef.current.value = '';
-    }
-  };
 
   return (
     <div>
@@ -182,18 +148,6 @@ export default function SystemAdmin() {
           ☢ Xóa toàn bộ dữ liệu
         </button>
       </div>
-
-      {/* Flash messages */}
-      {successMsg && (
-        <div style={{ marginBottom: 14, padding: '10px 14px', background: 'rgba(0,200,100,0.08)', border: '1px solid rgba(0,200,100,0.3)', borderRadius: 4, fontSize: 12, color: 'var(--green)' }}>
-          ✓ {successMsg}
-        </div>
-      )}
-      {errorMsg && (
-        <div style={{ marginBottom: 14, padding: '10px 14px', background: 'rgba(255,0,85,0.08)', border: '1px solid rgba(255,0,85,0.3)', borderRadius: 4, fontSize: 12, color: 'var(--red)' }}>
-          ✗ {errorMsg}
-        </div>
-      )}
 
       {/* Stats overview */}
       {stats && (
@@ -223,50 +177,6 @@ export default function SystemAdmin() {
           </div>
         </div>
       )}
-
-      {/* Backup + Restore */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-        {/* Backup */}
-        <div className="form-panel" style={{ padding: '14px 18px' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' }}>⬇ Sao lưu dữ liệu</div>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 12 }}>
-            Tải về file database SQLite (.db) — nên backup trước khi xóa hoặc khôi phục dữ liệu.
-          </div>
-          <a href="/api/admin/backup" download>
-            <button className="btn cyan btn-sm">⬇ Tải backup (.db)</button>
-          </a>
-        </div>
-
-        {/* Restore */}
-        <div className="form-panel" style={{ padding: '14px 18px', border: '1px solid rgba(255,170,0,0.25)', background: 'rgba(255,170,0,0.03)' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' }}>⬆ Khôi phục dữ liệu</div>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>
-            Upload file .db để khôi phục — database hiện tại sẽ bị ghi đè.
-          </div>
-          <div style={{ fontSize: 10, color: 'var(--yellow)', marginBottom: 12 }}>
-            ⚠ Server sẽ cần khởi động lại sau khi restore để áp dụng đầy đủ.
-          </div>
-          <input
-            ref={restoreRef}
-            type="file"
-            accept=".db"
-            style={{ display: 'none' }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) doRestore(f); }}
-          />
-          <button
-            className="btn yellow btn-sm"
-            disabled={restoring}
-            onClick={() => restoreRef.current?.click()}
-          >
-            {restoring ? `Đang upload... ${restoreProgress}%` : '⬆ Chọn file .db để restore'}
-          </button>
-          {restoring && (
-            <div style={{ marginTop: 8, height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${restoreProgress}%`, background: 'var(--yellow)', transition: 'width 0.2s' }} />
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Group cards */}
       <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' }}>

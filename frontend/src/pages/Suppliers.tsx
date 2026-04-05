@@ -1,4 +1,6 @@
+import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import RequestDeleteModal from '../components/RequestDeleteModal';
@@ -7,6 +9,7 @@ import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
 import HoloCard, { getSupplierRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
+import EmptyState from '../components/EmptyState';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
@@ -32,13 +35,21 @@ export default function Suppliers() {
   const [filter, setFilter] = useState<FilterState>({ ...defaultFilter, sortBy: 'ordered', sortDir: 'desc' });
   const [cardData, setCardData] = useState<HoloData | null>(null);
 
+  // ESC: đóng modal trong → ngoài
+  useEscKey(
+    cardData   ? () => setCardData(null) :
+    payModal   ? () => { setPayModal(null); setPayAmount(''); } :
+    open       ? () => setOpen(false) : null
+  );
+
   // MST lookup
   const [mstLoading, setMstLoading] = useState(false);
   const [mstResult, setMstResult] = useState<any>(null);
   const [mstError, setMstError]   = useState('');
   const mstTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = () => api.get('/suppliers').then((r) => setRows(r.data));
+  const [loading, setLoading] = useState(true);
+  const load = () => api.get('/suppliers').then((r) => { setRows(r.data); setLoading(false); });
   useEffect(() => { load(); }, []);
 
   // Debounced MST lookup when taxCode changes and type is domestic
@@ -98,7 +109,7 @@ export default function Suppliers() {
     setOpen(true);
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (editId) await api.put(`/suppliers/${editId}`, form);
     else        await api.post('/suppliers', form);
@@ -109,7 +120,7 @@ export default function Suppliers() {
     try {
       await api.post('/purchases/supplier-payments', { supplierId: payModal.id, amount: Number(payAmount) });
       setPayModal(null); setPayAmount(''); load();
-    } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
   const handleDelete = (id: number, name: string) => {
@@ -119,7 +130,7 @@ export default function Suppliers() {
 
   const doDelete = async (id: number) => {
     try { await api.delete(`/suppliers/${id}`); setConfirmDelete(null); load(); }
-    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
+    catch (err: any) { toast.error(err?.response?.data?.error || 'Không thể xóa'); }
   };
 
   const typeLabel = (t: string) => SUPPLIER_TYPES.find((x) => x.value === t)?.label || t;
@@ -211,12 +222,31 @@ export default function Suppliers() {
         <table className="nt">
           <thead><tr><th>Tên NCC</th><th>Loại</th><th>MST / Công ty</th><th>Điện thoại</th><th>Tổng đặt</th><th>Đang nợ</th><th></th></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={7}>{rows.length === 0 ? 'Chưa có nhà cung cấp' : 'Không tìm thấy kết quả'}</td></tr>}
+            {loading ? Array.from({ length: 5 }).map((_, i) => (
+              <tr key={i} className="skeleton-row">
+                <td><div className="skeleton w-md"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-xs"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+              </tr>
+            )) : <>
+            {filtered.length === 0 && (
+              <tr className="empty-row"><td colSpan={7}>
+                <EmptyState
+                  icon="🏭"
+                  title={rows.length === 0 ? 'Chưa có nhà cung cấp' : 'Không tìm thấy kết quả'}
+                  description={rows.length === 0 ? 'Thêm nhà cung cấp đầu tiên để bắt đầu.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'}
+                />
+              </td></tr>
+            )}
             {filtered.map((s) => {
               const rank = getSupplierRank(s.totalOrdered ?? 0);
               return (
-              <tr key={s.id} style={rank ? { background: `${rank.color}08`, borderLeft: `2px solid ${rank.color}55` } : undefined}>
-                <td>
+              <tr key={s.id} style={rank ? { background: `${rank.color}08` } : undefined}>
+                <td style={rank ? { borderLeft: `2px solid ${rank.color}55` } : undefined}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {rank && <span title={rank.label} style={{ fontSize: 15, flexShrink: 0 }}>{rank.icon}</span>}
                     <div>
@@ -257,6 +287,7 @@ export default function Suppliers() {
               </tr>
               );
             })}
+            </>}
           </tbody>
         </table>
       </div>

@@ -1,3 +1,4 @@
+import { toast } from '../components/Toast';
 import { useEffect, useState } from 'react';
 import api from '../api';
 
@@ -31,7 +32,7 @@ export default function CashflowCategories() {
   const del = async (c: any) => {
     if (!confirm(`Xóa danh mục "${c.name}"?`)) return;
     try { await api.delete(`/cashflow-categories/${c.id}`); load(); }
-    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
+    catch (err: any) { toast.error(err?.response?.data?.error || 'Không thể xóa'); }
   };
 
   const renderGroup = (list: any[], label: string, icon: string, type: string) => (

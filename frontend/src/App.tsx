@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Clock from './components/Clock';
+import { ToastContainer } from './components/Toast';
 import api from './api';
 import Dashboard from './pages/Dashboard';
 import Customers from './pages/Customers';
@@ -12,11 +13,15 @@ import Products from './pages/Products';
 import Suppliers from './pages/Suppliers';
 import Purchases from './pages/Purchases';
 import Users from './pages/Users';
-import DeleteRequests from './pages/DeleteRequests';
-import Logs from './pages/Logs';
+import Requests from './pages/Requests';
 import CashflowCategories from './pages/CashflowCategories';
 import SystemAdmin from './pages/SystemAdmin';
+import SystemHealth from './pages/SystemHealth';
+import AutoBackup from './pages/AutoBackup';
+import MyProfile from './pages/MyProfile';
+import RankConfig from './pages/RankConfig';
 import Login from './pages/Login';
+import { setRankConfig } from './components/HoloCard';
 
 const NAV = [
   { group: 'Tổng quan', groupIcon: '🏠', items: [
@@ -40,16 +45,33 @@ const NAV = [
 const PAGE_NAMES: Record<string, string> = {
   '/': 'Dashboard', '/customers': 'Khách hàng', '/suppliers': 'Nhà cung cấp',
   '/products': 'Sản phẩm', '/invoices': 'Hóa đơn bán', '/purchases': 'Nhập hàng',
-  '/cashflow': 'Thu / Chi', '/reports': 'Báo cáo', '/users': 'Người dùng',
-  '/logs': 'Log hệ thống', '/cashflow-categories': 'Danh mục Thu/Chi',
-  '/system-admin': 'Quản trị hệ thống',
+  '/cashflow': 'Thu / Chi', '/reports': 'Báo cáo', '/users': 'Nhân sự',
+  '/requests': 'Quản lý yêu cầu', '/cashflow-categories': 'Danh mục Thu/Chi',
+  '/rank-config':   'Cấu hình Rank',
+  '/system-admin':  'Quản trị dữ liệu',
+  '/system-health': 'Trạng thái server',
+  '/auto-backup':   'Cài đặt Backup',
+  '/my-profile': 'Hồ sơ của tôi',
+  '/my-delete-requests': 'Yêu cầu xóa của tôi',
 };
 
 function AppLayout() {
   const { user, loading, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Load rank config after login (admin only — staff use defaults)
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+    api.get('/admin/rank-config').then((r) => {
+      const d = r.data;
+      if (d) setRankConfig({ customer: d.customer, supplier: d.supplier, product: d.product, user: d.user });
+    }).catch(() => {});
+  }, [user?.id]);
+
   const [pendingCount, setPendingCount] = useState(0);
+  const [purCount, setPurCount] = useState(0);
+  const requestsPending = pendingCount + purCount;
+  const [myDeleteCount, setMyDeleteCount] = useState(0);
 
   // Close sidebar when route changes (mobile)
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
@@ -58,6 +80,24 @@ function AppLayout() {
   useEffect(() => {
     if (!user || user.role !== 'admin') return;
     const fetch = () => api.get('/delete-requests/count').then((r) => setPendingCount(r.data.count)).catch(() => {});
+    fetch();
+    const id = setInterval(fetch, 30_000);
+    return () => clearInterval(id);
+  }, [user]);
+
+  // Poll pending profile update requests count for admin badge
+  useEffect(() => {
+    if (!user || user.role !== 'admin') return;
+    const fetch = () => api.get('/profile-update-requests/count').then((r) => setPurCount(r.data.count)).catch(() => {});
+    fetch();
+    const id = setInterval(fetch, 30_000);
+    return () => clearInterval(id);
+  }, [user]);
+
+  // Poll my delete requests count for staff badge
+  useEffect(() => {
+    if (!user || user.role === 'admin') return;
+    const fetch = () => api.get('/delete-requests/mine/count').then((r) => setMyDeleteCount(r.data.count)).catch(() => {});
     fetch();
     const id = setInterval(fetch, 30_000);
     return () => clearInterval(id);
@@ -108,6 +148,27 @@ function AppLayout() {
             </div>
           ))}
 
+          {/* Cá nhân — all users */}
+          <div className="nav-group">
+            <div className="nav-group-label">
+              <span className="nav-group-icon">👤</span>
+              Cá nhân
+            </div>
+            <div className="nav-group-children">
+              <NavLink to="/my-profile" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🪪</span>
+                Hồ sơ của tôi
+              </NavLink>
+              {user.role !== 'admin' && (
+                <NavLink to="/my-delete-requests" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🗑️</span>
+                  Yêu cầu xóa của tôi
+                  {myDeleteCount > 0 && <span className="nav-badge">{myDeleteCount}</span>}
+                </NavLink>
+              )}
+            </div>
+          </div>
+
           {user.role === 'admin' && (
             <div className="nav-group">
               <div className="nav-group-label">
@@ -117,20 +178,28 @@ function AppLayout() {
               <div className="nav-group-children">
                 <NavLink to="/users" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                   <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>👤</span>
-                  Người dùng
+                  Nhân sự
                 </NavLink>
-                <NavLink to="/delete-requests" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🗑️</span>
-                  Yêu cầu xóa
-                  {pendingCount > 0 && <span className="nav-badge">{pendingCount}</span>}
+                <NavLink to="/requests" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📋</span>
+                  Quản lý yêu cầu
+                  {requestsPending > 0 && <span className="nav-badge">{requestsPending}</span>}
                 </NavLink>
                 <NavLink to="/cashflow-categories" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                   <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📂</span>
                   Danh mục Thu/Chi
                 </NavLink>
-                <NavLink to="/logs" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📋</span>
-                  Log hệ thống
+                <NavLink to="/system-health" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📡</span>
+                  Trạng thái server
+                </NavLink>
+                <NavLink to="/auto-backup" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>💾</span>
+                  Cài đặt Backup
+                </NavLink>
+                <NavLink to="/rank-config" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🏆</span>
+                  Cấu hình Rank
                 </NavLink>
                 <NavLink to="/system-admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                   <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>⚙</span>
@@ -173,10 +242,14 @@ function AppLayout() {
             <Route path="/cashflow" element={<Cashflow />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/users" element={<Users />} />
-            <Route path="/delete-requests" element={<DeleteRequests />} />
-            <Route path="/logs" element={<Logs />} />
+            <Route path="/requests" element={<Requests />} />
             <Route path="/cashflow-categories" element={<CashflowCategories />} />
+            <Route path="/rank-config" element={<RankConfig />} />
             <Route path="/system-admin" element={<SystemAdmin />} />
+            <Route path="/system-health" element={<SystemHealth />} />
+            <Route path="/my-profile" element={<MyProfile />} />
+            <Route path="/auto-backup" element={<AutoBackup />} />
+            <Route path="/my-delete-requests" element={<MyProfile initialTab="delete-requests" />} />
           </Routes>
         </div>
       </div>
@@ -189,6 +262,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <AppLayout />
+        <ToastContainer />
       </AuthProvider>
     </BrowserRouter>
   );

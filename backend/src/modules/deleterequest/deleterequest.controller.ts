@@ -33,4 +33,18 @@ export const deleteRequestController = {
       res.json(result);
     } catch (err: any) { res.status(400).json({ error: err.message }); }
   },
+
+  async getMine(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.id;
+      res.json(await deleteRequestService.getMine(userId));
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  },
+
+  async countMine(req: Request, res: Response) {
+    try {
+      const userId = (req as any).user.id;
+      res.json({ count: await deleteRequestService.countMine(userId) });
+    } catch (err: any) { res.status(500).json({ error: err.message }); }
+  },
 };

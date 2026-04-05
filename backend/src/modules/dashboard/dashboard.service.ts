@@ -146,7 +146,37 @@ export const dashboardService = {
       invoiceCount:   g._count.id,
     }));
 
-    // ── 8. Summary KPIs ──
+    // ── 8. Top staff by invoices created (KPI) ──
+    const staffInvoiceGroups = await prisma.invoice.groupBy({
+      by: ['createdByUserId'],
+      where: {
+        createdByUserId: { not: null },
+        OR: [
+          { invoiceDate: dateRange },
+          { invoiceDate: null, createdAt: dateRange },
+        ],
+        status: { not: 'cancelled' },
+      },
+      _sum:   { totalAmount: true },
+      _count: { id: true },
+      orderBy: { _sum: { totalAmount: 'desc' } },
+      take: 10,
+    });
+    const staffIds = staffInvoiceGroups.map((g) => g.createdByUserId!);
+    const staffInfos = await prisma.user.findMany({
+      where: { id: { in: staffIds } },
+      select: { id: true, name: true, role: true },
+    });
+    const staffMap = Object.fromEntries(staffInfos.map((s) => [s.id, s]));
+    const topStaff = staffInvoiceGroups.map((g) => ({
+      id:           g.createdByUserId!,
+      name:         staffMap[g.createdByUserId!]?.name || '(Ẩn)',
+      role:         staffMap[g.createdByUserId!]?.role || 'staff',
+      totalRevenue: g._sum.totalAmount || 0,
+      invoiceCount: g._count.id,
+    }));
+
+    // ── 9. Summary KPIs ──
     const totalIncome   = allCashflow.filter((c) => c.type === 'income').reduce((s, c) => s + c.amount, 0);
     const totalExpense  = allCashflow.filter((c) => c.type === 'expense').reduce((s, c) => s + c.amount, 0);
     const totalRevenue  = allInvoices.reduce((s, v) => s + v.totalAmount, 0);
@@ -176,6 +206,7 @@ export const dashboardService = {
       customerGrowth,
       topProducts,
       topCustomers,
+      topStaff,
     };
   },
 };
