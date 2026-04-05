@@ -39,7 +39,7 @@ function makeSheet(data: any[]): XLSX.WorkSheet {
   if (data.length === 0) return XLSX.utils.json_to_sheet(data);
   const cols = Object.keys(data[0]).length;
   // Tạo sheet từ data, offset 4 dòng (3 header + 1 trống)
-  const ws = XLSX.utils.json_to_sheet(data, { origin: 'A5' });
+  const ws = XLSX.utils.json_to_sheet(data, { origin: 'A5' } as any);
   addBrandHeader(ws, cols);
 
   // Cột rộng tự động

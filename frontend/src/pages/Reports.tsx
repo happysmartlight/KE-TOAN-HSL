@@ -118,7 +118,7 @@ export default function Reports() {
 
   // bar chart helper
   const maxVal = trend.length ? Math.max(...trend.map((t) => Math.max(t.revenue, t.income, 1))) : 1;
-  const bar = (val: number, color: string) => (
+  const _bar = (val: number, color: string) => (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
       <div style={{ width: '100%', height: 60, display: 'flex', alignItems: 'flex-end' }}>
         <div style={{
@@ -260,7 +260,7 @@ export default function Reports() {
       {periodType !== 'custom' && (
         <div className="card mb-16">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--yellow)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-            ◆ Xu hướng 12 tháng — Năm {periodType === 'custom' ? thisYear : year}
+            ◆ Xu hướng 12 tháng — Năm {year}
             {loadingTrend && <span style={{ color: 'var(--text-dim)', fontWeight: 400, marginLeft: 10 }}>đang tải...</span>}
           </div>
 

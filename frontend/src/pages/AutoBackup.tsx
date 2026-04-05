@@ -30,7 +30,7 @@ type Config = {
 };
 
 export default function AutoBackup() {
-  const [config, setConfig] = useState<Config | null>(null);
+  const [, setConfig] = useState<Config | null>(null);
   const [saving, setSaving] = useState(false);
   const [runBusy, setRunBusy] = useState(false);
 
