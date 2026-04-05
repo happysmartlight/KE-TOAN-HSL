@@ -444,7 +444,7 @@ export default function SystemHealth() {
           })()}
 
           {/* Live log */}
-          {upd.logs.length > 0 && (
+          {(upd.logs ?? []).length > 0 && (
             <div className="form-panel" style={{ padding: '12px 16px' }}>
               <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
                 📄 Log cập nhật
@@ -459,7 +459,7 @@ export default function SystemHealth() {
                   whiteSpace: 'pre-wrap', wordBreak: 'break-all',
                 }}
               >
-                {upd.logs.map((line, i) => {
+                {(upd.logs ?? []).map((line, i) => {
                   const isErr = /error|fail|✗|exit [^0]/i.test(line);
                   const isOk  = /✔|success|hoàn tất|xong/i.test(line);
                   const color = isErr ? 'var(--red)' : isOk ? 'var(--green)' : 'var(--text-bright)';

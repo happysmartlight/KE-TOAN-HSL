@@ -25,6 +25,63 @@ export type TailscaleState = {
 let _tsState: TailscaleState = { phase: 'idle' };
 const URL_RE = /https:\/\/login\.tailscale\.com\/[^\s\n\r]+/;
 
+// ── Update state ────────────────────────────────────────────────────────────
+export type UpdatePhase =
+  | 'idle'
+  | 'checking'
+  | 'up_to_date'
+  | 'update_available'
+  | 'updating'
+  | 'success'
+  | 'error';
+
+export type UpdateState = {
+  phase: UpdatePhase;
+  currentCommit?: string;
+  remoteCommit?: string;
+  commitsBehind?: number;
+  logs: string[];
+  error?: string;
+  checkedAt?: number;
+};
+
+// Logs ghi ra file để tồn tại qua PM2 reload
+const UPDATE_LOG_FILE = '/tmp/ke-toan-update.log';
+// PROJECT_ROOT: dist/modules/admin → 4 levels up = project root
+const PROJECT_ROOT = path.resolve(__dirname, '../../../../');
+
+let _updateState: UpdateState = { phase: 'idle', logs: [] };
+
+// Khôi phục state từ log file khi server restart sau deploy
+function _initUpdateState() {
+  try {
+    if (!fs.existsSync(UPDATE_LOG_FILE)) return;
+    const ageMs = Date.now() - fs.statSync(UPDATE_LOG_FILE).mtimeMs;
+    if (ageMs > 30 * 60 * 1000) return; // bỏ qua log > 30 phút
+    const lines = fs.readFileSync(UPDATE_LOG_FILE, 'utf-8').split('\n').filter(Boolean);
+    const text = lines.join('\n');
+    let phase: UpdatePhase = 'updating';
+    if (/cập nhật xong|reload pm2/i.test(text)) phase = 'success';
+    else if (/error|failed|thất bại|exit [^0]/i.test(text)) phase = 'error';
+    _updateState = { phase, logs: lines };
+  } catch { /* ignore */ }
+}
+_initUpdateState();
+
+function _appendUpdateLog(line: string) {
+  if (!_updateState.logs) _updateState.logs = [];
+  _updateState.logs.push(line);
+  if (_updateState.logs.length > 500) _updateState.logs = _updateState.logs.slice(-500);
+  try { fs.appendFileSync(UPDATE_LOG_FILE, line + '\n', 'utf-8'); } catch { /* ignore */ }
+}
+
+const _run = (cmd: string, cwd?: string) =>
+  new Promise<string>((resolve, reject) =>
+    exec(cmd, { cwd, timeout: 30_000 }, (err, stdout) =>
+      err ? reject(err) : resolve(stdout.trim())
+    )
+  );
+
 export type GroupName = 'customers' | 'suppliers' | 'products' | 'invoices' | 'purchases' | 'cashflow' | 'logs';
 
 export type RankTier = {
@@ -346,6 +403,82 @@ export const adminService = {
         _tsState = { phase: 'error', error: err.message };
       }
     })();
+
+    return { ok: true };
+  },
+
+  // ── Update ─────────────────────────────────────────────────────────────────
+
+  getUpdateState(): UpdateState {
+    return { ..._updateState, logs: [...(_updateState.logs ?? [])] };
+  },
+
+  async checkForUpdates(): Promise<void> {
+    _updateState = { phase: 'checking', logs: [] };
+    try {
+      await _run(`git -C "${PROJECT_ROOT}" fetch origin master`);
+      const [current, remote, countStr] = await Promise.all([
+        _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`),
+        _run(`git -C "${PROJECT_ROOT}" rev-parse --short origin/master`),
+        _run(`git -C "${PROJECT_ROOT}" rev-list HEAD..origin/master --count`),
+      ]);
+      const commitsBehind = parseInt(countStr, 10) || 0;
+      _updateState = {
+        phase: commitsBehind > 0 ? 'update_available' : 'up_to_date',
+        currentCommit: current,
+        remoteCommit: remote,
+        commitsBehind,
+        logs: [],
+        checkedAt: Date.now(),
+      };
+    } catch (err: any) {
+      _updateState = { phase: 'error', logs: [], error: `git fetch thất bại: ${err.message}` };
+    }
+  },
+
+  startUpdate(): { ok: boolean; error?: string } {
+    if (os.platform() !== 'linux') {
+      return { ok: false, error: 'Chỉ hỗ trợ trên Linux / Raspberry Pi.' };
+    }
+    const allowed: UpdatePhase[] = ['update_available', 'up_to_date', 'error'];
+    if (!allowed.includes(_updateState.phase)) {
+      return { ok: true }; // đang chạy rồi, frontend poll tiếp
+    }
+
+    // Xóa log cũ
+    try { fs.writeFileSync(UPDATE_LOG_FILE, '', 'utf-8'); } catch { /* ignore */ }
+    _updateState = {
+      phase: 'updating',
+      currentCommit: _updateState.currentCommit,
+      remoteCommit: _updateState.remoteCommit,
+      commitsBehind: _updateState.commitsBehind,
+      logs: [`[${new Date().toLocaleString('vi-VN')}] Bắt đầu cập nhật hệ thống...`],
+    };
+    _appendUpdateLog(_updateState.logs[0]);
+
+    const child = spawn('bash', ['-c', `cd "${PROJECT_ROOT}" && git pull && bash deploy.sh`], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    const handleData = (data: Buffer) => {
+      data.toString().split('\n').forEach((line) => {
+        const t = line.trim();
+        if (t) _appendUpdateLog(t);
+      });
+    };
+    child.stdout.on('data', handleData);
+    child.stderr.on('data', handleData);
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        _updateState.phase = 'success';
+        _appendUpdateLog('✔ Cập nhật hoàn tất.');
+      } else {
+        _updateState.phase = 'error';
+        _updateState.error = `Exit code: ${code}`;
+        _appendUpdateLog(`✗ Cập nhật thất bại (exit ${code}).`);
+      }
+    });
 
     return { ok: true };
   },
