@@ -95,7 +95,51 @@ export default function SystemHealth() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const logBoxRef = useRef<HTMLDivElement | null>(null);
 
+  // Restart state
+  type RestartState = 'idle' | 'confirming' | 'restarting' | 'done' | 'error';
+  const [restartState, setRestartState] = useState<RestartState>('idle');
+  const restartPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Startup state
+  const [startupStatus, setStartupStatus] = useState<{ configured: boolean } | null>(null);
+  const [startupLoading, setStartupLoading] = useState(false);
+  const [startupResult, setStartupResult] = useState<{ ok: boolean; message: string; command?: string } | null>(null);
+
   const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+
+  const handleRestart = async () => {
+    setRestartState('restarting');
+    try { await api.post('/admin/restart'); } catch { /* server may restart before response */ }
+    let attempts = 0;
+    restartPollRef.current = setInterval(async () => {
+      try {
+        await api.get('/admin/health');
+        clearInterval(restartPollRef.current!); restartPollRef.current = null;
+        setRestartState('done');
+        load();
+      } catch {
+        if (++attempts > 30) {
+          clearInterval(restartPollRef.current!); restartPollRef.current = null;
+          setRestartState('error');
+        }
+      }
+    }, 2000);
+  };
+
+  const loadStartupStatus = async () => {
+    try { const r = await api.get('/admin/startup-status'); setStartupStatus(r.data); } catch { /* ignore */ }
+  };
+
+  const handleSetupStartup = async () => {
+    setStartupLoading(true); setStartupResult(null);
+    try {
+      const r = await api.post('/admin/setup-startup');
+      setStartupResult(r.data);
+      if (r.data.ok) setStartupStatus({ configured: true });
+    } catch (err: any) {
+      setStartupResult({ ok: false, message: err.response?.data?.error || 'Lỗi kết nối' });
+    } finally { setStartupLoading(false); }
+  };
 
   const fetchUpdState = async (): Promise<boolean> => {
     try {
@@ -144,10 +188,14 @@ export default function SystemHealth() {
 
   useEffect(() => {
     if (tab === 'update') fetchUpdState();
+    if (tab === 'status') loadStartupStatus();
     return () => { if (tab !== 'update') stopPoll(); };
   }, [tab]);
 
-  useEffect(() => () => stopPoll(), []);
+  useEffect(() => () => {
+    stopPoll();
+    if (restartPollRef.current) clearInterval(restartPollRef.current);
+  }, []);
 
   const loadLogs = async () => {
     setLogsLoading(true);
@@ -326,6 +374,83 @@ export default function SystemHealth() {
       {/* Auto-refresh note */}
       <div style={{ marginTop: 20, fontSize: 10, color: 'var(--text-dim)', textAlign: 'center', letterSpacing: 1 }}>
         ◆ Tự động làm mới mỗi 10 giây
+      </div>
+
+      {/* ── Server Controls ── */}
+      <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 12 }}>
+
+        {/* Restart panel */}
+        <div className="form-panel" style={{ padding: '16px 18px', borderColor: 'rgba(255,0,85,0.25)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 12, letterSpacing: 1, textTransform: 'uppercase' }}>
+            🔄 Khởi động lại server
+          </div>
+          {restartState === 'idle' && (
+            <button className="btn red btn-sm" onClick={() => setRestartState('confirming')}>Khởi động lại ngay</button>
+          )}
+          {restartState === 'confirming' && (
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--yellow)', marginBottom: 10 }}>⚠ Server sẽ ngắt kết nối vài giây. Xác nhận?</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn red btn-sm" onClick={handleRestart}>Xác nhận</button>
+                <button className="btn ghost btn-sm" onClick={() => setRestartState('idle')}>Hủy</button>
+              </div>
+            </div>
+          )}
+          {restartState === 'restarting' && (
+            <div style={{ fontSize: 12, color: 'var(--yellow)' }}>⟳ Đang khởi động lại...</div>
+          )}
+          {restartState === 'done' && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--green)', marginBottom: 8 }}>✔ Server đã khởi động lại thành công.</div>
+              <button className="btn ghost btn-sm" onClick={() => setRestartState('idle')}>OK</button>
+            </div>
+          )}
+          {restartState === 'error' && (
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 8 }}>✗ Không thể kết nối lại sau 60 giây.</div>
+              <button className="btn ghost btn-sm" onClick={() => setRestartState('idle')}>OK</button>
+            </div>
+          )}
+        </div>
+
+        {/* Auto-start panel */}
+        <div className="form-panel" style={{ padding: '16px 18px', borderColor: startupStatus?.configured ? 'rgba(0,255,136,0.25)' : 'rgba(255,204,0,0.25)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 12, letterSpacing: 1, textTransform: 'uppercase' }}>
+            ⚡ Tự động khởi động sau cúp điện
+          </div>
+          {!startupStatus ? (
+            <div className="c-dim" style={{ fontSize: 11 }}>Đang kiểm tra...</div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <StatusDot ok={startupStatus.configured} />
+                <span style={{ fontSize: 12, color: startupStatus.configured ? 'var(--green)' : 'var(--yellow)' }}>
+                  {startupStatus.configured ? 'Đã cấu hình — tự động bật khi có điện' : 'Chưa cấu hình'}
+                </span>
+              </div>
+              <button
+                className={`btn ${startupStatus.configured ? 'ghost' : 'yellow'} btn-sm`}
+                onClick={handleSetupStartup}
+                disabled={startupLoading}
+              >
+                {startupLoading ? '...' : startupStatus.configured ? '↻ Lưu lại danh sách tiến trình' : '⚡ Thiết lập tự động khởi động'}
+              </button>
+              {startupResult && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 11, color: startupResult.ok ? 'var(--green)' : 'var(--yellow)' }}>
+                    {startupResult.message}
+                  </div>
+                  {startupResult.command && (
+                    <pre style={{ marginTop: 8, fontFamily: 'monospace', fontSize: 10, background: 'rgba(0,0,0,0.4)', padding: '8px 10px', borderRadius: 4, border: '1px solid rgba(0,245,255,0.15)', overflowX: 'auto', color: 'var(--cyan)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      {startupResult.command}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
       </div>
         </>
       )}

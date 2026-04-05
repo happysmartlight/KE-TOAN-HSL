@@ -75,6 +75,28 @@ export const adminController = {
     res.json({ ok: true });
   },
 
+  // ── Server control ────────────────────────────────────────────────────────
+  restartServer(_req: Request, res: Response) {
+    adminService.restartServer();
+    res.json({ ok: true });
+  },
+
+  async getStartupStatus(_req: Request, res: Response) {
+    try {
+      res.json(await adminService.getStartupStatus());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  async setupStartup(_req: Request, res: Response) {
+    try {
+      res.json(await adminService.setupStartup());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
   getNetworkInfo(_req: Request, res: Response) {
     try {
       res.json(adminService.getNetworkInfo());

@@ -483,8 +483,75 @@ export const adminService = {
     return { ok: true };
   },
 
-  getNetworkInfo() {
-    const interfaces = os.networkInterfaces();
+  // ── Server control ─────────────────────────────────────────────────────────
+
+  restartServer() {
+    // Fire pm2 reload in background so HTTP response is sent first
+    spawn('pm2', ['reload', 'ke-toan-backend'], { detached: true, stdio: 'ignore' }).unref();
+  },
+
+  async getStartupStatus(): Promise<{ configured: boolean }> {
+    if (os.platform() !== 'linux') return { configured: false };
+    return new Promise((resolve) => {
+      exec('whoami', (err, user) => {
+        if (err) return resolve({ configured: false });
+        exec(`systemctl is-enabled pm2-${user.trim()} 2>/dev/null`, (err2) => {
+          resolve({ configured: !err2 });
+        });
+      });
+    });
+  },
+
+  async setupStartup(): Promise<{ ok: boolean; message: string; command?: string }> {
+    if (os.platform() !== 'linux') {
+      return { ok: false, message: 'Chỉ hỗ trợ trên Linux / Raspberry Pi.' };
+    }
+    try {
+      // Save current PM2 process list first
+      await _run('pm2 save --force');
+
+      // Check if already configured
+      const { configured } = await adminService.getStartupStatus();
+      if (configured) {
+        return { ok: true, message: 'PM2 đã được cấu hình tự động khởi động. Danh sách tiến trình đã được lưu lại.' };
+      }
+
+      // Get the startup command from pm2 (captures stdout+stderr)
+      const startupOutput = await new Promise<string>((resolve) => {
+        exec('pm2 startup systemd 2>&1', { timeout: 15_000 }, (_, stdout, stderr) => {
+          resolve((stdout || '') + (stderr || ''));
+        });
+      });
+
+      // Extract the "sudo env PATH=..." command
+      const match = startupOutput.match(/sudo\s+env\s+[^\n]+/);
+      const sudoCmd = match ? match[0].trim() : null;
+
+      if (sudoCmd) {
+        try {
+          await _run(sudoCmd);
+          await _run('pm2 save --force');
+          return { ok: true, message: '✔ Đã cấu hình tự động khởi động thành công!' };
+        } catch {
+          return {
+            ok: false,
+            message: 'Cần chạy 2 lệnh sau trong terminal SSH rồi nhấn Thiết lập lại:',
+            command: sudoCmd + '\npm2 save',
+          };
+        }
+      }
+
+      return {
+        ok: false,
+        message: 'Chạy 2 lệnh sau trong terminal SSH:',
+        command: 'pm2 startup\npm2 save',
+      };
+    } catch (err: any) {
+      return { ok: false, message: err.message };
+    }
+  },
+
+  getNetworkInfo() {    const interfaces = os.networkInterfaces();
     const allIPs: string[] = [];
 
     for (const addrs of Object.values(interfaces)) {
