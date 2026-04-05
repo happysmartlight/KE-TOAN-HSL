@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import multer from 'multer';
 import { customerRouter } from './modules/customer/customer.route';
 import { invoiceRouter } from './modules/invoice/invoice.route';
 import { cashflowRouter } from './modules/cashflow/cashflow.route';
@@ -18,6 +19,7 @@ import { deleteRequestRouter } from './modules/deleterequest/deleterequest.route
 import { logRouter } from './modules/log/log.route';
 import { cashflowCategoryRouter } from './modules/cashflow-category/cashflow-category.route';
 import { cashflowCategoryService } from './modules/cashflow-category/cashflow-category.service';
+import { adminRouter } from './modules/admin/admin.route';
 import { requireAuth, requireAdmin } from './middleware/auth.middleware';
 
 const app = express();
@@ -49,12 +51,66 @@ app.use('/api/delete-requests',    requireAuth, deleteRequestRouter);
 app.use('/api/logs',               requireAuth, logRouter);
 app.use('/api/cashflow-categories', requireAuth, cashflowCategoryRouter);
 
-// Backup endpoint (admin only)
+// Admin data management (admin only)
+app.use('/api/admin', requireAdmin, adminRouter);
+
+const DB_PATH = path.join(__dirname, '../../prisma/dev.db');
+
+// ── Backup — tải về file db ──
 app.get('/api/admin/backup', requireAdmin, (_req, res) => {
-  const dbPath = path.join(__dirname, '../../prisma/dev.db');
-  if (!fs.existsSync(dbPath)) return res.status(404).json({ error: 'Database không tìm thấy' });
+  if (!fs.existsSync(DB_PATH)) return res.status(404).json({ error: 'Database không tìm thấy' });
   const date = new Date().toISOString().slice(0, 10);
-  res.download(dbPath, `backup-ke-toan-${date}.db`);
+  res.download(DB_PATH, `backup-ke-toan-${date}.db`);
+});
+
+// ── Restore — upload file db để khôi phục ──
+const uploadTmp = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, path.join(__dirname, '../../prisma')),
+    filename:    (_req, _file, cb) => cb(null, `restore-tmp-${Date.now()}.db`),
+  }),
+  limits: { fileSize: 100 * 1024 * 1024 }, // max 100MB
+  fileFilter: (_req, file, cb) => {
+    // Chỉ chấp nhận .db file
+    if (file.originalname.endsWith('.db') || file.mimetype === 'application/octet-stream') {
+      cb(null, true);
+    } else {
+      cb(new Error('Chỉ chấp nhận file .db'));
+    }
+  },
+});
+
+app.post('/api/admin/restore', requireAdmin, uploadTmp.single('db'), async (req, res) => {
+  const tmpPath = (req as any).file?.path;
+  if (!tmpPath) return res.status(400).json({ error: 'Không nhận được file upload' });
+
+  try {
+    // Validate: kiểm tra SQLite magic bytes (53 51 4C 69 74 65 ...)
+    const buf = Buffer.alloc(16);
+    const fd  = fs.openSync(tmpPath, 'r');
+    fs.readSync(fd, buf, 0, 16, 0);
+    fs.closeSync(fd);
+    const magic = buf.toString('ascii', 0, 16);
+    if (!magic.startsWith('SQLite format 3')) {
+      fs.unlinkSync(tmpPath);
+      return res.status(400).json({ error: 'File không phải SQLite database hợp lệ' });
+    }
+
+    // Backup db hiện tại trước khi ghi đè
+    if (fs.existsSync(DB_PATH)) {
+      const safeBak = DB_PATH + '.pre-restore-' + Date.now();
+      fs.copyFileSync(DB_PATH, safeBak);
+    }
+
+    // Ghi đè db bằng file upload
+    fs.copyFileSync(tmpPath, DB_PATH);
+    fs.unlinkSync(tmpPath);
+
+    res.json({ ok: true, message: 'Khôi phục thành công. Vui lòng khởi động lại server.' });
+  } catch (err: any) {
+    if (tmpPath && fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    res.status(500).json({ error: 'Lỗi khi restore: ' + err.message });
+  }
 });
 
 // Serve frontend static files (production)

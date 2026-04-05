@@ -5,7 +5,7 @@ import RequestDeleteModal from '../components/RequestDeleteModal';
 import ConfirmModal from '../components/ConfirmModal';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
-import HoloCard from '../components/HoloCard';
+import HoloCard, { getProductRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
@@ -24,7 +24,7 @@ export default function Products() {
   const [deleteModal, setDeleteModal] = useState<{ id: number; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ id: number; name: string; stock: number } | null>(null);
 
-  const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [filter, setFilter] = useState<FilterState>({ ...defaultFilter, sortBy: 'sold', sortDir: 'desc' });
   const [cardData, setCardData] = useState<HoloData | null>(null);
 
   const load = () => api.get('/products').then((r) => setRows(r.data));
@@ -47,9 +47,10 @@ export default function Products() {
     if (filter.amountMax) r = r.filter((p) => p.sellingPrice <= Number(filter.amountMax));
     r.sort((a, b) => {
       const dir = filter.sortDir === 'desc' ? -1 : 1;
-      if (filter.sortBy === 'name')  return dir * a.name.localeCompare(b.name);
-      if (filter.sortBy === 'stock') return dir * (a.stock - b.stock);
-      if (filter.sortBy === 'price') return dir * (a.sellingPrice - b.sellingPrice);
+      if (filter.sortBy === 'name')    return dir * a.name.localeCompare(b.name);
+      if (filter.sortBy === 'stock')   return dir * (a.stock - b.stock);
+      if (filter.sortBy === 'price')   return dir * (a.sellingPrice - b.sellingPrice);
+      if (filter.sortBy === 'sold')    return dir * ((a.totalRevenue ?? 0) - (b.totalRevenue ?? 0));
       return dir * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) * -1;
     });
     return r;
@@ -131,6 +132,7 @@ export default function Products() {
           { value: 'ok',  label: 'Còn hàng' },
         ]}
         sortOptions={[
+          { value: 'sold_desc',  label: '↓ Bán chạy nhất' },
           { value: 'date_desc',  label: '↓ Mới nhất' },
           { value: 'date_asc',   label: '↑ Cũ nhất' },
           { value: 'name_asc',   label: 'A→Z Tên SP' },
@@ -144,27 +146,50 @@ export default function Products() {
 
       <div className="table-wrap">
         <table className="nt">
-          <thead><tr><th>Tên SP</th><th>SKU</th><th>ĐVT</th><th>Giá vốn</th><th>Giá bán</th><th>VAT</th><th>Tồn kho</th><th></th></tr></thead>
+          <thead><tr><th>Tên SP</th><th>SKU</th><th>ĐVT</th><th>Giá vốn</th><th>Giá bán</th><th>VAT</th><th>Đã bán</th><th>Tồn kho</th><th></th></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={8}>{rows.length === 0 ? 'Chưa có sản phẩm' : 'Không tìm thấy kết quả'}</td></tr>}
-            {filtered.map((p) => (
-              <tr key={p.id}>
-                <td className="c-bright fw7">{p.name}</td>
+            {filtered.length === 0 && <tr className="empty-row"><td colSpan={9}>{rows.length === 0 ? 'Chưa có sản phẩm' : 'Không tìm thấy kết quả'}</td></tr>}
+            {filtered.map((p) => {
+              const rank = getProductRank(p.totalRevenue ?? 0);
+              return (
+              <tr key={p.id} style={rank ? { background: `${rank.color}08`, borderLeft: `2px solid ${rank.color}55` } : undefined}>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {rank && <span title={rank.label} style={{ fontSize: 14, flexShrink: 0 }}>{rank.icon}</span>}
+                    <div>
+                      <div className="fw7" style={rank ? { color: rank.color } : { color: 'var(--bright)' }}>{p.name}</div>
+                      {rank && (
+                        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, marginTop: 2, color: rank.color, textTransform: 'uppercase' }}>
+                          {rank.label}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </td>
                 <td className="c-dim">{p.sku || '—'}</td>
                 <td>{p.unit}</td>
                 <td className="c-dim">{fmt(p.costPrice)}</td>
-                <td className="c-cyan">{fmt(p.sellingPrice)}</td>
+                <td style={{ color: rank?.color ?? 'var(--cyan)' }} className="fw7">{fmt(p.sellingPrice)}</td>
                 <td><span className={`tag ${TAX_COLOR[p.taxRate] || 'cyan'}`}>{p.taxRate || '10%'}</span></td>
+                <td>
+                  {(p.totalRevenue ?? 0) > 0 ? (
+                    <>
+                      <div className="fw7" style={{ color: rank?.color ?? 'var(--cyan)', fontSize: 12 }}>{fmt(p.totalRevenue)}</div>
+                      <div className="c-dim" style={{ fontSize: 10 }}>{(p.totalSold ?? 0).toLocaleString('vi-VN')} {p.unit}</div>
+                    </>
+                  ) : <span className="c-dim">—</span>}
+                </td>
                 <td><span className={`tag ${p.stock <= 0 ? 'red' : p.stock <= 5 ? 'yellow' : 'green'}`}>{p.stock}</span></td>
                 <td><div className="td-act">
-                  <button className="btn green btn-sm" onClick={() => setCardData({ type: 'product', id: p.id, name: p.name, createdAt: p.createdAt, sku: p.sku, unit: p.unit, costPrice: p.costPrice, sellingPrice: p.sellingPrice, stock: p.stock })}>Xem</button>
+                  <button className="btn green btn-sm" onClick={() => setCardData({ type: 'product', id: p.id, name: p.name, createdAt: p.createdAt, sku: p.sku, unit: p.unit, costPrice: p.costPrice, sellingPrice: p.sellingPrice, stock: p.stock, totalSold: p.totalSold, totalRevenue: p.totalRevenue })}>Xem</button>
                   <button className="btn yellow btn-sm" onClick={() => openEdit(p)}>Sửa</button>
                   <button className={`btn ${isAdmin ? 'red' : 'ghost'} btn-sm`} onClick={() => handleDelete(p.id, p.name, p.stock)}>
                     {isAdmin ? 'Xóa' : '🗑 Yêu cầu'}
                   </button>
                 </div></td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

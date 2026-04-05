@@ -30,8 +30,10 @@ type XmlItem = {
 type XmlPreview = {
   invoiceDate: string;
   eInvoiceCode: string;
-  buyerName: string;
+  buyerName: string;        // Ten — tên công ty
+  buyerPersonName: string;  // HVTNMHang — tên người đại diện
   buyerTax: string;
+  buyerAddress: string;
   xmlItems: XmlItem[];
   preTaxTotal: number;
   vatTotal: number;
@@ -48,11 +50,14 @@ type BatchPreviewItem = {
 };
 type BatchPreview = {
   eInvoiceCode: string; invoiceDate: string;
-  buyerName: string; buyerTax: string;
+  buyerName: string;        // Ten — tên công ty
+  buyerPersonName?: string; // HVTNMHang — tên người đại diện
+  buyerTax: string; buyerAddress: string;
   grandTotal: number; initialPaid: number; skipInventory: boolean;
   customerId: number | null; customerName: string | null;
   items: BatchPreviewItem[];
   warnings: string[]; isDuplicate: boolean;
+  batchMergeIndex?: number; // index hóa đơn trong batch đã resolve KH này lần đầu
   // UI state
   selected: boolean; paidAmount: string;
 };
@@ -65,9 +70,11 @@ function parseXMLInvoice(xmlText: string): Omit<XmlPreview, 'customerId' | 'paid
   const invoiceDate  = t(doc, 'NLap');
   const eInvoiceCode = `${t(doc, 'KHHDon')}-${t(doc, 'SHDon')}`;
 
-  const nMua    = doc.getElementsByTagName('NMua')[0];
-  const buyerName = nMua ? t(nMua, 'Ten') : '';
-  const buyerTax  = nMua ? t(nMua, 'MST') : '';
+  const nMua           = doc.getElementsByTagName('NMua')[0];
+  const buyerName      = nMua ? t(nMua, 'Ten') : '';           // tên công ty
+  const buyerPersonName = nMua ? t(nMua, 'HVTNMHang') : '';   // tên người đại diện
+  const buyerTax       = nMua ? t(nMua, 'MST') : '';
+  const buyerAddress   = nMua ? t(nMua, 'DChi') : '';
 
   const xmlItems: XmlItem[] = Array.from(doc.getElementsByTagName('HHDVu')).map(el => ({
     xmlName:   t(el, 'THHDVu'),
@@ -82,7 +89,7 @@ function parseXMLInvoice(xmlText: string): Omit<XmlPreview, 'customerId' | 'paid
   const vatTotal    = Number(t(doc, 'TgTThue'))  || 0;
   const grandTotal  = Number(t(doc, 'TgTTTBSo')) || 0;
 
-  return { invoiceDate, eInvoiceCode, buyerName, buyerTax, xmlItems, preTaxTotal, vatTotal, grandTotal };
+  return { invoiceDate, eInvoiceCode, buyerName, buyerPersonName, buyerTax, buyerAddress, xmlItems, preTaxTotal, vatTotal, grandTotal };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,6 +108,7 @@ export default function Invoices() {
   const [payModal, setPayModal]   = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
   const [confirmModal, setConfirmModal] = useState<null | { type: 'cancel' | 'delete'; inv: any }>(null);
+  const [detailInv, setDetailInv] = useState<any>(null);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
 
   // Inline new customer
@@ -298,14 +306,16 @@ export default function Invoices() {
           try {
             const p = parseXMLInvoice(ev.target?.result as string);
             resolve({
-              eInvoiceCode:  p.eInvoiceCode,
-              invoiceDate:   p.invoiceDate,
-              buyerName:     p.buyerName,
-              buyerTax:      p.buyerTax,
-              grandTotal:    p.grandTotal,
-              initialPaid:   0,
-              skipInventory: batchSkipInventory,
-              items:         p.xmlItems,   // xmlItems → items (backend expects 'items')
+              eInvoiceCode:   p.eInvoiceCode,
+              invoiceDate:    p.invoiceDate,
+              buyerName:      p.buyerName,
+              buyerPersonName: p.buyerPersonName,
+              buyerTax:       p.buyerTax,
+              buyerAddress:   p.buyerAddress,
+              grandTotal:     p.grandTotal,
+              initialPaid:    0,
+              skipInventory:  batchSkipInventory,
+              items:          p.xmlItems,
             });
           } catch { resolve(null); }
         };
@@ -321,7 +331,7 @@ export default function Invoices() {
       setBatchPreviews((data as any[]).map((p) => ({
         ...p,
         selected: !p.isDuplicate,
-        paidAmount: '0',
+        paidAmount: String(p.grandTotal), // mặc định 100%
       })));
     } catch (err: any) {
       alert(err.response?.data?.error || 'Lỗi khi preview');
@@ -330,19 +340,24 @@ export default function Invoices() {
 
   const submitBatchImport = async () => {
     if (!batchPreviews) return;
-    const selected = batchPreviews.filter((p) => p.selected && !p.isDuplicate && p.customerId);
+    // Cho phép customerId = null → backend sẽ tự tạo customer mới
+    const selected = batchPreviews.filter((p) => p.selected && !p.isDuplicate);
     if (!selected.length) { alert('Không có hóa đơn nào hợp lệ được chọn.'); return; }
 
     setBatchLoading(true);
     try {
       const { data } = await api.post('/invoices/xml-batch', {
         invoices: selected.map((p) => ({
-          eInvoiceCode:  p.eInvoiceCode,
-          invoiceDate:   p.invoiceDate,
-          customerId:    p.customerId,
-          grandTotal:    p.grandTotal,
-          initialPaid:   Number(p.paidAmount) || 0,
-          skipInventory: p.skipInventory,
+          eInvoiceCode:   p.eInvoiceCode,
+          invoiceDate:    p.invoiceDate,
+          customerId:     p.customerId,
+          buyerName:      p.buyerName,
+          buyerPersonName: p.buyerPersonName,
+          buyerTax:       p.buyerTax,
+          buyerAddress:   p.buyerAddress,
+          grandTotal:     p.grandTotal,
+          initialPaid:    Number(p.paidAmount) || 0,
+          skipInventory:  p.skipInventory,
           items: p.items.map((item) => ({
             productId:  item.productId,
             xmlName:    item.xmlName,
@@ -560,6 +575,7 @@ export default function Invoices() {
           <thead><tr><th>Mã HĐ</th><th>Ngày lập</th><th>Khách hàng</th><th>Tổng tiền</th><th>Đã thu</th><th>Còn nợ</th><th>Trạng thái</th><th></th></tr></thead>
           <tbody>
             {filtered.length === 0 && <tr className="empty-row"><td colSpan={8}>{rows.length === 0 ? 'Chưa có hóa đơn' : 'Không tìm thấy kết quả'}</td></tr>}
+
             {filtered.map((inv) => {
               const s = STATUS[inv.status] || STATUS.unpaid;
               const remaining = inv.totalAmount - inv.paidAmount;
@@ -582,6 +598,7 @@ export default function Invoices() {
                   <td className={`fw7 ${remaining > 0 && !isCancelled ? 'c-red' : 'c-dim'}`} style={isCancelled ? { opacity: 0.45 } : {}}>{fmt(remaining)}</td>
                   <td style={isCancelled ? { opacity: 0.45 } : {}}><span className={`tag ${s.cls}`}>{s.label}</span></td>
                   <td><div className="td-act">
+                    <button className="btn ghost btn-sm" onClick={() => setDetailInv(inv)}>Chi tiết</button>
                     {!isCancelled && inv.status !== 'paid' && (
                       <button className="btn green btn-sm" onClick={() => { setPayModal(inv); setPayAmount(String(remaining)); }}>Thu tiền</button>
                     )}
@@ -765,6 +782,81 @@ export default function Invoices() {
         </div>
       )}
 
+      {/* ── Chi tiết hóa đơn ────────────────────────────────────────────────── */}
+      {detailInv && (
+        <div className="modal-bg" onClick={() => setDetailInv(null)}>
+          <div className="modal" style={{ maxWidth: 680, width: '95vw', maxHeight: '88vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">◈ Chi tiết — {detailInv.code}</div>
+
+            {/* Header */}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 14, padding: '8px 12px', background: 'rgba(0,245,255,0.04)', borderRadius: 6, border: '1px solid rgba(0,245,255,0.1)', fontSize: 11 }}>
+              <div><span className="c-dim">Ngày lập: </span><span className="c-bright">{fmtDate(detailInv.invoiceDate ?? detailInv.createdAt)}</span></div>
+              {detailInv.eInvoiceCode && <div><span className="c-dim">HĐĐT: </span><span className="c-yellow">{detailInv.eInvoiceCode}</span></div>}
+              <div><span className="c-dim">Khách hàng: </span><span className="c-bright">{detailInv.customer?.name}</span></div>
+              {detailInv.customer?.companyName && <div><span className="c-dim">Công ty: </span><span className="c-dim">{detailInv.customer.companyName}</span></div>}
+              {detailInv.customer?.taxCode && <div><span className="c-dim">MST: </span><span className="c-cyan">{detailInv.customer.taxCode}</span></div>}
+              <div><span className="c-dim">Trạng thái: </span><span className={`tag ${(STATUS[detailInv.status] || STATUS.unpaid).cls}`}>{(STATUS[detailInv.status] || STATUS.unpaid).label}</span></div>
+            </div>
+
+            {/* Items table */}
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--cyan)', letterSpacing: 1, marginBottom: 6 }}>// DANH SÁCH HÀNG HÓA / DỊCH VỤ</div>
+            <div className="table-wrap mb-12">
+              <table className="nt" style={{ fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Tên hàng hóa</th>
+                    <th>ĐVT</th>
+                    <th>SL</th>
+                    <th style={{ textAlign: 'right' }}>Đơn giá</th>
+                    <th>VAT</th>
+                    <th style={{ textAlign: 'right' }}>Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailInv.items?.length > 0
+                    ? detailInv.items.map((item: any, i: number) => (
+                        <tr key={i}>
+                          <td className="c-bright">{item.product?.name || <span className="c-dim">—</span>}</td>
+                          <td className="c-dim" style={{ textAlign: 'center' }}>{item.product?.unit || '—'}</td>
+                          <td style={{ textAlign: 'center' }}>{item.quantity}</td>
+                          <td style={{ textAlign: 'right' }}>{fmt(item.price)}</td>
+                          <td style={{ textAlign: 'center' }} className="c-yellow">{item.taxRate || '—'}</td>
+                          <td style={{ textAlign: 'right' }} className="c-bright fw7">{fmt(item.subtotal)}</td>
+                        </tr>
+                      ))
+                    : <tr className="empty-row"><td colSpan={6}>Không có dữ liệu chi tiết</td></tr>
+                  }
+                </tbody>
+                {detailInv.items?.length > 0 && (
+                  <tfoot>
+                    <tr style={{ borderTop: '1px solid var(--border)' }}>
+                      <td colSpan={5} style={{ textAlign: 'right', fontSize: 11 }} className="c-dim">Tổng tiền hàng (chưa VAT)</td>
+                      <td style={{ textAlign: 'right' }} className="c-bright">{fmt(detailInv.items.reduce((s: number, i: any) => s + i.subtotal, 0))}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: 'right', fontSize: 11 }} className="c-dim">Tổng thanh toán</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, fontSize: 14 }} className="c-cyan">{fmt(detailInv.totalAmount)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+
+            {/* Payment summary */}
+            <div style={{ display: 'flex', gap: 16, padding: '8px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: 6, fontSize: 12 }}>
+              <span className="c-dim">Tổng: <span className="c-bright fw7">{fmt(detailInv.totalAmount)}</span></span>
+              <span className="c-dim">Đã thu: <span className="c-green fw7">{fmt(detailInv.paidAmount)}</span></span>
+              <span className="c-dim">Còn nợ: <span className={`fw7 ${detailInv.totalAmount - detailInv.paidAmount > 0 ? 'c-red' : 'c-dim'}`}>{fmt(detailInv.totalAmount - detailInv.paidAmount)}</span></span>
+              {detailInv.note && <span className="c-dim">Ghi chú: <span className="c-bright">{detailInv.note}</span></span>}
+            </div>
+
+            <div className="form-actions" style={{ marginTop: 14 }}>
+              <button className="btn ghost" onClick={() => setDetailInv(null)}>[ Đóng ]</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Batch XML Import Modal ─────────────────────────────────────────── */}
       {batchPreviews && (
         <div className="modal-bg" onClick={() => setBatchPreviews(null)}>
@@ -803,6 +895,7 @@ export default function Invoices() {
                     <th>HĐĐT</th>
                     <th>Ngày lập</th>
                     <th>Khách hàng</th>
+                    <th>Công ty</th>
                     <th style={{ textAlign: 'right' }}>Tổng</th>
                     <th>Đã thu</th>
                     <th>Trạng thái</th>
@@ -813,7 +906,8 @@ export default function Invoices() {
                   {batchPreviews.map((p, i) => {
                     const hasWarn = p.warnings.length > 0;
                     const isExpanded = expandedRows.has(i);
-                    const canSelect = !p.isDuplicate && !!p.customerId;
+                    // batchMergeIndex có nghĩa KH sẽ được merge với hóa đơn khác → hợp lệ
+                    const canSelect = !p.isDuplicate && (!!p.customerId || p.batchMergeIndex !== undefined);
                     const rowColor = p.isDuplicate ? 'rgba(255,80,80,0.06)' : hasWarn ? 'rgba(255,200,0,0.04)' : undefined;
 
                     return (
@@ -831,7 +925,15 @@ export default function Invoices() {
                           <td>
                             {p.customerName
                               ? <span className="c-bright" style={{ fontSize: 12 }}>{p.customerName}</span>
-                              : <span className="c-red" style={{ fontSize: 11 }}>⚠ {p.buyerName}</span>
+                              : p.batchMergeIndex !== undefined
+                                ? <span style={{ fontSize: 11, color: 'var(--cyan)' }}>↗ Merge với #{p.batchMergeIndex + 1}</span>
+                                : <span className="c-yellow" style={{ fontSize: 11 }}>✦ {p.buyerPersonName || p.buyerName}</span>
+                            }
+                          </td>
+                          <td>
+                            {p.buyerName
+                              ? <span className="c-dim" style={{ fontSize: 11 }}>{p.buyerName}</span>
+                              : <span className="c-dim" style={{ fontSize: 11 }}>—</span>
                             }
                           </td>
                           <td style={{ textAlign: 'right', fontWeight: 700 }} className="c-bright">{fmt(p.grandTotal)}</td>
@@ -852,11 +954,17 @@ export default function Invoices() {
                           <td>
                             {p.isDuplicate
                               ? <span className="tag red" style={{ fontSize: 10 }}>Đã tồn tại</span>
-                              : p.items.some((it) => it.willCreate)
-                                ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo SP mới</span>
-                                : !p.customerId
-                                  ? <span className="tag red" style={{ fontSize: 10 }}>Thiếu KH</span>
-                                  : <span className="tag green" style={{ fontSize: 10 }}>Sẵn sàng</span>
+                              : p.batchMergeIndex !== undefined
+                                ? p.items.some((it) => it.willCreate)
+                                  ? <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH · Tạo SP mới</span>
+                                  : <span className="tag cyan" style={{ fontSize: 10 }}>↗ Merge KH (batch #{p.batchMergeIndex + 1})</span>
+                                : !p.customerId && p.items.some((it) => it.willCreate)
+                                  ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo KH+SP mới</span>
+                                  : !p.customerId
+                                    ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo KH mới</span>
+                                    : p.items.some((it) => it.willCreate)
+                                      ? <span className="tag yellow" style={{ fontSize: 10 }}>Tạo SP mới</span>
+                                      : <span className="tag green" style={{ fontSize: 10 }}>Sẵn sàng</span>
                             }
                           </td>
                           <td>
@@ -869,7 +977,7 @@ export default function Invoices() {
                         {/* Expanded detail */}
                         {isExpanded && (
                           <tr key={`${i}-detail`} style={{ background: 'rgba(0,0,0,0.2)' }}>
-                            <td colSpan={8} style={{ padding: '8px 16px' }}>
+                            <td colSpan={9} style={{ padding: '8px 16px' }}>
                               {/* Warnings */}
                               {p.warnings.map((w, wi) => (
                                 <div key={wi} style={{ fontSize: 11, color: 'var(--yellow)', marginBottom: 4 }}>⚠ {w}</div>

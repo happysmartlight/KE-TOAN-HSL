@@ -71,7 +71,11 @@ export default function Login() {
       <div className="login-box">
         {/* Logo + tên hệ thống */}
         <div className="login-logo">
-          <img src="/logo.svg" alt={APP_NAME} />
+          <div className="login-logo-text">
+            <div className="login-logo-prompt">{'>'}_</div>
+            <div className="login-logo-happy">HAPPY</div>
+            <div className="login-logo-smart">SMART<span className="login-logo-light"> LIGHT</span></div>
+          </div>
         </div>
         <div className="login-sub">Hệ thống kế toán nội bộ</div>
 

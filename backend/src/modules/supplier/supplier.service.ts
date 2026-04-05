@@ -2,7 +2,18 @@ import prisma from '../../utils/prisma';
 
 export const supplierService = {
   async getAll() {
-    return prisma.supplier.findMany({ where: { status: 'active' }, orderBy: { createdAt: 'desc' } });
+    const suppliers = await prisma.supplier.findMany({
+      where: { status: 'active' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        purchases: { select: { totalAmount: true } },
+      },
+    });
+    return suppliers.map((s) => ({
+      ...s,
+      totalOrdered: s.purchases.reduce((sum, p) => sum + p.totalAmount, 0),
+      orderCount:   s.purchases.length,
+    }));
   },
 
   async getById(id: number) {

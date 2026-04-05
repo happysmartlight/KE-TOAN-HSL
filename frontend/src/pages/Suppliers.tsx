@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState, useRef } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import RequestDeleteModal from '../components/RequestDeleteModal';
+import ConfirmModal from '../components/ConfirmModal';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
-import HoloCard from '../components/HoloCard';
+import HoloCard, { getSupplierRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
@@ -27,7 +28,8 @@ export default function Suppliers() {
   const [payModal, setPayModal] = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
   const [deleteModal, setDeleteModal] = useState<{ id: number; name: string } | null>(null);
-  const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: number; name: string } | null>(null);
+  const [filter, setFilter] = useState<FilterState>({ ...defaultFilter, sortBy: 'ordered', sortDir: 'desc' });
   const [cardData, setCardData] = useState<HoloData | null>(null);
 
   // MST lookup
@@ -80,8 +82,9 @@ export default function Suppliers() {
     if (filter.type) r = r.filter((s) => s.supplierType === filter.type);
     r.sort((a, b) => {
       const dir = filter.sortDir === 'desc' ? -1 : 1;
-      if (filter.sortBy === 'name') return dir * a.name.localeCompare(b.name);
-      if (filter.sortBy === 'debt') return dir * (a.debt - b.debt);
+      if (filter.sortBy === 'name')    return dir * a.name.localeCompare(b.name);
+      if (filter.sortBy === 'debt')    return dir * (a.debt - b.debt);
+      if (filter.sortBy === 'ordered') return dir * ((a.totalOrdered ?? 0) - (b.totalOrdered ?? 0));
       return dir * (new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) * -1;
     });
     return r;
@@ -109,14 +112,14 @@ export default function Suppliers() {
     } catch (err: any) { alert(err.response?.data?.error || 'Lỗi'); }
   };
 
-  const handleDelete = async (id: number, name: string) => {
-    if (isAdmin) {
-      if (!confirm(`Xóa nhà cung cấp "${name}"?`)) return;
-      try { await api.delete(`/suppliers/${id}`); load(); }
-      catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
-    } else {
-      setDeleteModal({ id, name });
-    }
+  const handleDelete = (id: number, name: string) => {
+    if (isAdmin) setConfirmDelete({ id, name });
+    else setDeleteModal({ id, name });
+  };
+
+  const doDelete = async (id: number) => {
+    try { await api.delete(`/suppliers/${id}`); setConfirmDelete(null); load(); }
+    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
   };
 
   const typeLabel = (t: string) => SUPPLIER_TYPES.find((x) => x.value === t)?.label || t;
@@ -194,33 +197,57 @@ export default function Suppliers() {
           { value: 'international', label: 'Quốc tế' },
         ]}
         sortOptions={[
-          { value: 'date_desc', label: '↓ Mới nhất' },
-          { value: 'date_asc',  label: '↑ Cũ nhất' },
-          { value: 'name_asc',  label: 'A→Z Tên' },
-          { value: 'name_desc', label: 'Z→A Tên' },
-          { value: 'debt_desc', label: '↓ Nợ nhiều nhất' },
-          { value: 'debt_asc',  label: '↑ Nợ ít nhất' },
+          { value: 'ordered_desc', label: '↓ Đặt nhiều nhất' },
+          { value: 'date_desc',    label: '↓ Mới nhất' },
+          { value: 'date_asc',     label: '↑ Cũ nhất' },
+          { value: 'name_asc',     label: 'A→Z Tên' },
+          { value: 'name_desc',    label: 'Z→A Tên' },
+          { value: 'debt_desc',    label: '↓ Nợ nhiều nhất' },
+          { value: 'debt_asc',     label: '↑ Nợ ít nhất' },
         ]}
       />
 
       <div className="table-wrap">
         <table className="nt">
-          <thead><tr><th>Tên NCC</th><th>Loại</th><th>MST / Công ty</th><th>Điện thoại</th><th>Đang nợ</th><th></th></tr></thead>
+          <thead><tr><th>Tên NCC</th><th>Loại</th><th>MST / Công ty</th><th>Điện thoại</th><th>Tổng đặt</th><th>Đang nợ</th><th></th></tr></thead>
           <tbody>
-            {filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{rows.length === 0 ? 'Chưa có nhà cung cấp' : 'Không tìm thấy kết quả'}</td></tr>}
-            {filtered.map((s) => (
-              <tr key={s.id}>
-                <td className="c-bright fw7">{s.name}</td>
+            {filtered.length === 0 && <tr className="empty-row"><td colSpan={7}>{rows.length === 0 ? 'Chưa có nhà cung cấp' : 'Không tìm thấy kết quả'}</td></tr>}
+            {filtered.map((s) => {
+              const rank = getSupplierRank(s.totalOrdered ?? 0);
+              return (
+              <tr key={s.id} style={rank ? { background: `${rank.color}08`, borderLeft: `2px solid ${rank.color}55` } : undefined}>
+                <td>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {rank && <span title={rank.label} style={{ fontSize: 15, flexShrink: 0 }}>{rank.icon}</span>}
+                    <div>
+                      <div className="c-bright fw7" style={rank ? { color: rank.color } : undefined}>{s.name}</div>
+                      {s.email && <div className="c-dim" style={{ fontSize: 10 }}>{s.email}</div>}
+                    </div>
+                  </div>
+                </td>
                 <td><span className={`tag ${s.supplierType === 'international' ? 'purple' : s.supplierType === 'intermediary' ? 'yellow' : 'cyan'}`}>{typeLabel(s.supplierType)}</span></td>
                 <td>
-                  {s.taxCode && <div style={{ fontSize: 11, color: '#8898b8' }}>{s.taxCode}</div>}
+                  {s.taxCode    && <div style={{ fontSize: 11, color: '#8898b8' }}>{s.taxCode}</div>}
                   {s.companyName && <div style={{ fontSize: 12 }}>{s.companyName}</div>}
                   {!s.taxCode && !s.companyName && <span className="c-dim">—</span>}
                 </td>
                 <td>{s.phone || <span className="c-dim">—</span>}</td>
+                <td>
+                  {(s.totalOrdered ?? 0) > 0 ? (
+                    <>
+                      <div className="fw7" style={{ color: rank?.color ?? 'var(--cyan)' }}>{fmt(s.totalOrdered)}</div>
+                      <div className="c-dim" style={{ fontSize: 10 }}>{s.orderCount} đơn</div>
+                      {rank && (
+                        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, marginTop: 3, color: rank.color, textTransform: 'uppercase' }}>
+                          {rank.icon} {rank.label}
+                        </div>
+                      )}
+                    </>
+                  ) : <span className="c-dim">—</span>}
+                </td>
                 <td className={`fw7 ${s.debt > 0 ? 'c-red' : 'c-dim'}`}>{fmt(s.debt)}</td>
                 <td><div className="td-act">
-                  <button className="btn green btn-sm" onClick={() => setCardData({ type: 'supplier', id: s.id, name: s.name, createdAt: s.createdAt, phone: s.phone, email: s.email, address: s.address, companyName: s.companyName, taxCode: s.taxCode, debt: s.debt, supplierType: s.supplierType })}>Xem</button>
+                  <button className="btn green btn-sm" onClick={() => setCardData({ type: 'supplier', id: s.id, name: s.name, createdAt: s.createdAt, phone: s.phone, email: s.email, address: s.address, companyName: s.companyName, taxCode: s.taxCode, debt: s.debt, supplierType: s.supplierType, totalOrdered: s.totalOrdered, orderCount: s.orderCount })}>Xem</button>
                   {s.debt > 0 && <button className="btn green btn-sm" onClick={() => { setPayModal(s); setPayAmount(String(s.debt)); }}>Trả tiền</button>}
                   <button className="btn yellow btn-sm" onClick={() => openEdit(s)}>Sửa</button>
                   <button className={`btn ${isAdmin ? 'red' : 'ghost'} btn-sm`} onClick={() => handleDelete(s.id, s.name)}>
@@ -228,10 +255,22 @@ export default function Suppliers() {
                   </button>
                 </div></td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title="Xóa nhà cung cấp"
+          message={`Bạn có chắc muốn xóa nhà cung cấp "${confirmDelete.name}"?`}
+          warning="Toàn bộ dữ liệu liên quan (đơn mua, thanh toán) sẽ không thể khôi phục."
+          confirmLabel="Xóa vĩnh viễn"
+          onConfirm={() => doDelete(confirmDelete.id)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {deleteModal && (
         <RequestDeleteModal

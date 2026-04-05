@@ -16,49 +16,81 @@ export interface HoloData {
   invoiceCount?: number;
   // Supplier
   supplierType?: string;
+  totalOrdered?: number;
+  orderCount?: number;
   // Product
   sku?: string;
   unit?: string;
   costPrice?: number;
   sellingPrice?: number;
   stock?: number;
+  totalSold?: number;
+  totalRevenue?: number;
 }
+
+// ── Rank system ───────────────────────────────────────────────────────────────
+export const CUSTOMER_RANKS = [
+  { label: 'THÁCH ĐẤU', min: 50_000_000, icon: '⚔️',  color: '#ff2244', glow: '#ff003344' },
+  { label: 'KIM CƯƠNG',  min: 20_000_000, icon: '💎',  color: '#00d4ff', glow: '#00aaff44' },
+  { label: 'BẠCH KIM',   min: 10_000_000, icon: '🔮',  color: '#bf80ff', glow: '#9944ff44' },
+  { label: 'VÀNG',       min:  5_000_000, icon: '⭐',  color: '#ffcc00', glow: '#ffaa0044' },
+] as const;
+
+export function getCustomerRank(totalPurchased: number) {
+  return CUSTOMER_RANKS.find((r) => totalPurchased >= r.min) ?? null;
+}
+
+// Supplier dùng cùng ngưỡng, đo theo tổng đơn mua
+export { CUSTOMER_RANKS as SUPPLIER_RANKS };
+export function getSupplierRank(totalOrdered: number) {
+  return CUSTOMER_RANKS.find((r) => totalOrdered >= r.min) ?? null;
+}
+
+// Product rank theo tổng doanh thu bán được
+export function getProductRank(totalRevenue: number) {
+  return CUSTOMER_RANKS.find((r) => totalRevenue >= r.min) ?? null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const fmt  = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 const fmtD = (d: string) => new Date(d).toLocaleDateString('vi-VN');
 
 function getTheme(data: HoloData) {
   if (data.type === 'customer') {
+    const rank    = getCustomerRank(data.totalPurchased ?? 0);
     const hasDebt = (data.debt ?? 0) > 0;
     return {
-      color1: '#00f5ff',
-      icon: '👤', typeLabel: 'KHÁCH HÀNG',
-      badge: hasDebt ? 'Còn nợ' : 'Sạch nợ',
+      color1:     rank?.color ?? '#00f5ff',
+      icon:       '👤',
+      typeLabel:  'KHÁCH HÀNG',
+      badge:      hasDebt ? 'Còn nợ' : 'Sạch nợ',
       badgeColor: hasDebt ? '#ff5577' : '#00ff88',
+      rank,
     };
   }
   if (data.type === 'supplier') {
-    const map: Record<string, [string, string]> = {
+    const rank = getSupplierRank(data.totalOrdered ?? 0);
+    const typeMap: Record<string, [string, string]> = {
       domestic:      ['#00ff88', 'Nội địa'],
       intermediary:  ['#ffcc00', 'Trung gian'],
       international: ['#bf00ff', 'Quốc tế'],
     };
-    const [c1, label] = map[data.supplierType || 'domestic'];
+    const [typeColor, typeLabel2] = typeMap[data.supplierType || 'domestic'];
     return {
-      color1: c1,
+      color1: rank?.color ?? typeColor,
       icon: '🏭', typeLabel: 'NHÀ CUNG CẤP',
-      badge: label,
-      badgeColor: c1,
+      badge: typeLabel2, badgeColor: typeColor, rank,
     };
   }
   // product
   const s = data.stock ?? 0;
   const stockColor = s <= 0 ? '#ff5577' : s <= 5 ? '#ffcc00' : '#00ff88';
+  const pRank = getProductRank(data.totalRevenue ?? 0);
   return {
-    color1: '#a78bfa',
-    icon: '📦', typeLabel: 'SẢN PHẨM',
+    color1: pRank?.color ?? '#a78bfa', icon: '📦', typeLabel: 'SẢN PHẨM',
     badge: s <= 0 ? 'Hết hàng' : s <= 5 ? 'Sắp hết' : 'Còn hàng',
-    badgeColor: stockColor,
+    badgeColor: stockColor, rank: pRank,
   };
 }
 
@@ -70,6 +102,7 @@ export default function HoloCard({ data }: { data: HoloData }) {
       {/* scanline overlay */}
       <div className="hcard-scan" />
 
+      {/* Header */}
       <div className="hcard-hdr">
         <span className="hcard-icon">{theme.icon}</span>
         <span className="hcard-type">// {theme.typeLabel}</span>
@@ -77,35 +110,65 @@ export default function HoloCard({ data }: { data: HoloData }) {
         <span className="hcard-badge" style={{ color: theme.badgeColor }}>[ {theme.badge} ]</span>
       </div>
 
+      {/* Name + company */}
       <div className="hcard-name">{data.name}</div>
       {data.companyName && data.companyName !== data.name && (
         <div className="hcard-sub">— {data.companyName}</div>
       )}
 
+      {/* Rank banner — customer, supplier, product */}
+      {theme.rank && (
+        <div
+          className="hcard-rank"
+          style={{
+            borderColor: theme.rank.color,
+            color:       theme.rank.color,
+            boxShadow:   `0 0 18px ${theme.rank.glow}, inset 0 0 12px ${theme.rank.glow}`,
+          }}
+        >
+          <span className="hcard-rank-icon">{theme.rank.icon}</span>
+          <div style={{ flex: 1 }}>
+            <div className="hcard-rank-label">{theme.rank.label}</div>
+            <div className="hcard-rank-sub">Top khách hàng</div>
+          </div>
+          <span className="hcard-rank-trophy">🏆</span>
+        </div>
+      )}
+
       <div className="hcard-div" />
 
+      {/* Info rows */}
       <div className="hcard-rows">
-        {data.phone   && <HRow label="SĐT"       value={data.phone} />}
-        {data.email   && <HRow label="Email"      value={data.email} />}
-        {data.address && <HRow label="Địa chỉ"   value={data.address} />}
-        {data.taxCode && <HRow label="MST"        value={data.taxCode} />}
-
         {data.type === 'customer' && <>
-          <HRow label="Tổng mua"  value={fmt(data.totalPurchased ?? 0)} color={theme.color1} />
-          <HRow label="Đơn hàng"  value={String(data.invoiceCount ?? 0)} />
-          <HRow label="Công nợ"   value={fmt(data.debt ?? 0)} color={(data.debt ?? 0) > 0 ? '#ff5577' : '#505070'} />
+          <HRow label="SĐT"      value={data.phone    || '—'} />
+          <HRow label="Email"    value={data.email    || '—'} />
+          <HRow label="Địa chỉ" value={data.address  || '—'} />
+          <HRow label="MST"      value={data.taxCode  || '—'} />
+          <HRow label="Tổng mua" value={fmt(data.totalPurchased ?? 0)} color={theme.color1} />
+          <HRow label="Đơn hàng" value={`${data.invoiceCount ?? 0} hóa đơn`} />
+          <HRow label="Công nợ"  value={fmt(data.debt ?? 0)}
+            color={(data.debt ?? 0) > 0 ? '#ff5577' : '#505070'} />
         </>}
 
-        {data.type === 'supplier' && (
-          <HRow label="Đang nợ" value={fmt(data.debt ?? 0)} color={(data.debt ?? 0) > 0 ? '#ff5577' : '#505070'} />
-        )}
+        {data.type === 'supplier' && <>
+          <HRow label="SĐT"      value={data.phone   || '—'} />
+          <HRow label="Email"    value={data.email   || '—'} />
+          <HRow label="Địa chỉ" value={data.address || '—'} />
+          <HRow label="MST"      value={data.taxCode || '—'} />
+          <HRow label="Tổng đặt" value={fmt(data.totalOrdered ?? 0)} color={theme.color1} />
+          <HRow label="Đơn mua"  value={`${data.orderCount ?? 0} đơn`} />
+          <HRow label="Đang nợ"  value={fmt(data.debt ?? 0)}
+            color={(data.debt ?? 0) > 0 ? '#ff5577' : '#505070'} />
+        </>}
 
         {data.type === 'product' && <>
-          {data.sku  && <HRow label="SKU"      value={data.sku} />}
-          {data.unit && <HRow label="Đơn vị"  value={data.unit} />}
-          <HRow label="Giá bán"  value={fmt(data.sellingPrice ?? 0)} color={theme.color1} />
-          <HRow label="Giá vốn"  value={fmt(data.costPrice ?? 0)} />
-          <HRow label="Tồn kho"  value={String(data.stock ?? 0)} color={theme.badgeColor} />
+          {data.sku  && <HRow label="SKU"     value={data.sku} />}
+          {data.unit && <HRow label="Đơn vị" value={data.unit} />}
+          <HRow label="Giá bán"   value={fmt(data.sellingPrice ?? 0)} color={theme.color1} />
+          <HRow label="Giá vốn"   value={fmt(data.costPrice ?? 0)} />
+          <HRow label="Tồn kho"   value={`${data.stock ?? 0} ${data.unit || ''}`} color={theme.badgeColor} />
+          <HRow label="Đã bán"    value={`${(data.totalSold ?? 0).toLocaleString('vi-VN')} ${data.unit || ''}`} color={theme.color1} />
+          <HRow label="Doanh thu" value={fmt(data.totalRevenue ?? 0)} color={theme.color1} />
         </>}
 
         <HRow label="Ngày thêm" value={fmtD(data.createdAt)} />

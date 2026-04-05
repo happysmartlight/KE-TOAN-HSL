@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.3.0] — 2026-04-05
+
+### Tính năng mới
+
+#### Admin: Backup & Restore database
+- Trang Quản trị hệ thống có thêm panel **Khôi phục dữ liệu** bên cạnh panel Sao lưu
+- Upload file `.db` trực tiếp trên giao diện — với progress bar upload
+- Backend validate magic bytes SQLite trước khi ghi đè, tự backup file cũ trước khi restore
+- Endpoint: `POST /api/admin/restore` (multer, max 100MB, chỉ nhận `.db`)
+
+#### XML Import — tách tên công ty / tên người
+- `<Ten>` → `companyName` của khách hàng
+- `<HVTNMHang>` → `name` (người đại diện) của khách hàng
+- Trước đây bị gộp nhầm, gây dữ liệu KH sai khi import HĐĐT
+
+#### XML Batch Import — chống duplicate thông minh
+- **Khách hàng**: cùng MST trong một batch → tự động merge thành 1 KH, không tạo bản ghi mới
+- Preview hiển thị "↗ Merge với #N" (cyan) thay "⚠ Tạo KH mới" khi phát hiện trùng trong batch
+- **Sản phẩm**: cùng tên + cùng giá bán → merge; cùng tên khác giá → coi là sản phẩm khác
+- Default "Đã thu" = 100% (trước là 0%)
+
+#### Rank System — Khách hàng, Nhà cung cấp, Sản phẩm
+- 4 mốc rank: ⚔️ THÁCH ĐẤU (≥50M) / 💎 KIM CƯƠNG (≥20M) / 🔮 BẠCH KIM (≥10M) / ⭐ VÀNG (≥5M)
+- Khách hàng rank theo `totalPurchased`, NCC theo `totalOrdered`, Sản phẩm theo `totalRevenue`
+- Table row highlight màu rank, icon rank trước tên
+- HoloCard hiển thị rank banner với glow effect
+- Default sort tự động theo "mua/đặt/bán nhiều nhất"
+
+#### HoloCard — cải tiến
+- Luôn hiển thị đầy đủ tất cả fields (phone, MST, địa chỉ, email, công nợ) — rỗng → "—"
+- Thêm section sản phẩm: "Đã bán" + "Doanh thu"
+- NCC: hiển thị "Tổng đặt" + "Số đơn"
+
+#### Dashboard — cải tiến toàn diện
+- **Biểu đồ Doanh thu & Lợi nhuận**: glowing dot tại mỗi điểm dữ liệu (staggered pulse), spark chạy theo đường line, activeDot với halo glow
+- **Biểu đồ Tăng trưởng KH**: cùng hiệu ứng spark + glow dot
+- **Biểu đồ Thu/Chi**: bỏ cursor trắng chói → cursor cyan mờ; activeBar glow đúng màu (xanh lá / đỏ)
+- **Top khách hàng**: click vào bất kỳ KH → mở HoloCard popup đầy đủ thông tin
+- **Top sản phẩm**: thay BarChart (bị cắt tên dài) bằng danh sách ranked list với progress bar tỉ lệ
+- **Customer growth**: dùng ngày lập HĐ đầu tiên (không phải `createdAt`) làm mốc "tham gia"
+- **Tooltip**: số người/KH hiển thị đúng không còn kèm ký hiệu "₫"
+- `topCustomers` trả về thêm `id` để hỗ trợ click → HoloCard
+
+#### UI / UX
+- **Logo sidebar**: thay SVG bằng text terminal-style "HAPPY / SMART LIGHT" với hiệu ứng flicker CRT + cursor nhấp nháy + cyan pulse
+- **Logo trang Login**: cùng style, size lớn hơn (36px)
+- **"Hệ thống kế toán nội bộ"**: căn giữa trên trang Login
+- **Year selector Dashboard**: desktop = button row, mobile (≤640px) = dropdown `<select>` styled cyan
+
+### Sửa lỗi
+- `mode: 'insensitive'` không hỗ trợ trên SQLite — đã chuyển sang exact match khi tìm KH theo `companyName` trong batch import
+- `batchMergeIndex` bị mất sau refactor — đã khôi phục logic `results.push` trong `xmlPreview()`
+
+---
+
 ## [0.2.0] — 2026-04-04
 
 ### Tính năng mới

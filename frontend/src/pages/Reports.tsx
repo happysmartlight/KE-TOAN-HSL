@@ -33,8 +33,7 @@ const thisYear  = new Date().getFullYear();
 const thisMonth = new Date().getMonth();      // 0-indexed
 const thisQ     = Math.floor(thisMonth / 3);  // 0-indexed
 
-// Tạo danh sách năm từ 2020 đến năm hiện tại + 1
-const YEARS = Array.from({ length: thisYear - 2019 + 1 }, (_, i) => 2020 + i);
+const YEARS = Array.from({ length: 11 }, (_, i) => 2025 + i);
 
 export default function Reports() {
   const [pl, setPl]           = useState<any>(null);

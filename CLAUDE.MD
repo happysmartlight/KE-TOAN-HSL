@@ -291,6 +291,113 @@ You MUST respond in structured steps:
 
 ---
 
+## UI / UX CONVENTIONS (cập nhật từ v0.2)
+
+### Confirm/Delete Dialog
+- **KHÔNG dùng `window.confirm()`** — luôn dùng component `ConfirmModal`
+- Import: `import ConfirmModal from '../components/ConfirmModal'`
+- Pattern chuẩn:
+  ```tsx
+  const [confirmDelete, setConfirmDelete] = useState<{ id: number; name: string } | null>(null);
+
+  const handleDelete = (id: number, name: string) => {
+    if (isAdmin) setConfirmDelete({ id, name });
+    else setDeleteModal({ id, name }); // RequestDeleteModal cho non-admin
+  };
+
+  const doDelete = async (id: number) => {
+    try { await api.delete(`/resource/${id}`); setConfirmDelete(null); load(); }
+    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
+  };
+
+  // Trong JSX:
+  {confirmDelete && (
+    <ConfirmModal
+      title="Xóa [tên thực thể]"
+      message={`Bạn có chắc muốn xóa "${confirmDelete.name}"?`}
+      warning="Dữ liệu liên quan sẽ không thể khôi phục."
+      confirmLabel="Xóa vĩnh viễn"
+      onConfirm={() => doDelete(confirmDelete.id)}
+      onCancel={() => setConfirmDelete(null)}
+    />
+  )}
+  ```
+- Props của ConfirmModal: `title`, `message?`, `warning?`, `confirmLabel?`, `confirmCls?`, `onConfirm`, `onCancel`
+
+### CSS Tag classes
+- `.tag.cyan`, `.tag.red`, `.tag.yellow`, `.tag.purple`, `.tag.green` — KHÔNG dùng `.tag-cyan`
+
+### FilterBar
+- `import FilterBar, { defaultFilter } from '../components/FilterBar'`
+- `import type { FilterState } from '../components/FilterBar'` (import type riêng)
+
+### SearchSelect
+- React Portal-based dropdown, dùng khi dropdown nằm trong table để tránh overflow clipping
+
+### Period Selector (Thu/Chi, Báo cáo)
+- Dùng `getPeriodRange(type, year, month)` → `{ from, to }` → truyền vào API params
+- Filter ngày ở API level, không filter client-side
+- `date` field trên Cashflow = ngày giao dịch thực tế (không phải `createdAt`)
+
+### Invoice Date
+- Hóa đơn có `invoiceDate` (ngày lập thực tế từ XML) và `createdAt` (ngày nhập hệ thống)
+- Hiển thị và filter luôn dùng: `invoiceDate ?? createdAt`
+- Báo cáo doanh thu filter theo `invoiceDate` (ưu tiên) hoặc `createdAt` nếu null
+
+### Rank System (Khách hàng & Nhà cung cấp)
+- File: `frontend/src/components/HoloCard.tsx` — export `CUSTOMER_RANKS`, `getCustomerRank`, `getSupplierRank`
+- **Ngưỡng rank** (dùng chung cho cả KH lẫn NCC):
+
+| Rank | Ngưỡng | Icon | Màu |
+|---|---|---|---|
+| THÁCH ĐẤU | ≥ 50,000,000 ₫ | ⚔️ | `#ff2244` |
+| KIM CƯƠNG  | ≥ 20,000,000 ₫ | 💎 | `#00d4ff` |
+| BẠCH KIM   | ≥ 10,000,000 ₫ | 🔮 | `#bf80ff` |
+| VÀNG       | ≥  5,000,000 ₫ | ⭐ | `#ffcc00` |
+
+- **Khách hàng**: rank theo `totalPurchased`; default sort trang = `purchased_desc`
+- **Nhà cung cấp**: rank theo `totalOrdered` (tổng PurchaseOrder); default sort trang = `ordered_desc`
+- **Table row**: row có rank → `background: rank.color + '08'`, `borderLeft: 2px solid rank.color + '55'`; icon rank trước tên; tên đổi màu theo rank
+- **HoloCard**: glow color = rank color (nếu có rank); rank banner hiển thị giữa tên và divider (`.hcard-rank` trong index.css)
+- **Tất cả fields KH/NCC luôn hiển thị** trong HoloCard (kể cả rỗng → hiện `—`)
+
+### Admin Backup & Restore
+- Trang `SystemAdmin.tsx` có 2 panel ngang nhau: **Sao lưu** (download) và **Khôi phục** (upload)
+- Backup: `GET /api/admin/backup` → download file `.db`
+- Restore: `POST /api/admin/restore` (multer, field name `db`, max 100MB)
+  - Validate SQLite magic bytes: `SQLite format 3`
+  - Tự backup DB hiện tại thành `.pre-restore-{timestamp}.db` trước khi ghi đè
+  - Frontend dùng `useRef<HTMLInputElement>` cho hidden file input + `FormData` + `onUploadProgress`
+- Chỉ admin mới truy cập được (`requireAdmin` middleware)
+
+### Logo Terminal Style
+- **Sidebar** (`App.tsx`): div `.sidebar-logo` chứa `.logo-text` với 3 phần: `.logo-prompt` (>_), `.logo-line1` (HAPPY), `.logo-line2` (SMART `.logo-accent`{LIGHT})
+- **Login** (`Login.tsx`): tương tự với class prefix `login-logo-*`, size lớn hơn (36px)
+- Animation: `logo-flicker` (CRT flicker ngẫu nhiên), `logo-pulse` (cyan glow breathe), `logo-prompt-blink` (cursor blink step-end)
+- CSS trong `index.css`: `.logo-*` và `.login-logo-*` classes
+
+### Dashboard — Chart Animations
+- **GlowDot**: custom dot component cho Area/Line — circle với `filter: drop-shadow`, `transformBox: fill-box`, `animation: chartDotPulse` staggered theo `index * 0.2s`
+- **GlowActiveDot**: 3 vòng tròn lồng nhau (halo + mid + bright core) khi hover
+- **Light tracer**: thêm ghost `Area`/`Line` trùng dataKey, `fill="none"`, `strokeDasharray="10 2000"`, `isAnimationActive={false}`, `legendType="none"`, `className="tracer-{color}"` → CSS `animation: lineTrace linear infinite` trên `.tracer-* .recharts-area-curve / .recharts-line-curve`
+  - Tốc độ khác nhau để tránh đồng bộ: green=4s, cyan=5.5s delay 1s, purple=3.5s
+- **Bar chart hover**: `<Tooltip cursor={{ fill: 'rgba(0,245,255,0.04)' }}>` thay cursor trắng; `activeBar={<Rectangle style={{ filter: 'drop-shadow(...)' }}>}` với màu đúng từng cột
+- CSS keyframes: `chartDotPulse`, `lineTrace` trong `index.css`
+
+### Dashboard — Top Khách hàng Clickable
+- Click vào bất kỳ row trong "🏆 Top khách hàng" → fetch `GET /customers/:id` → mở HoloCard popup
+- Backend: `topCustomers` trả về `id` (thêm `id: g.customerId` trong `dashboard.service.ts`)
+- Frontend: `openCustomer(id)` async, tính `totalPurchased` từ invoices (trừ cancelled), set `cardData`
+- Hover effect: top 3 dùng `filter: brightness(1.25)`, #4+ dùng cyan tint border
+
+### Year Selector — Responsive
+- Desktop (>640px): hàng button `.year-selector-btns` (như cũ)
+- Mobile (≤640px): ẩn buttons, hiển thị `<select class="year-select">` styled cyan
+- CSS classes: `.year-selector-btns`, `.year-selector-select`, `.year-select` trong `index.css`
+- Cả loading state và main render đều dùng cùng markup
+
+---
+
 ## FINAL GOAL
 
 Deliver a system that:

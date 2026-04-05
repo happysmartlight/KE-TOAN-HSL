@@ -2,9 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import api from '../api';
 import { useAuth } from '../context/AuthContext';
 import RequestDeleteModal from '../components/RequestDeleteModal';
+import ConfirmModal from '../components/ConfirmModal';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
-import HoloCard from '../components/HoloCard';
+import HoloCard, { getCustomerRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
@@ -22,6 +23,7 @@ export default function Customers() {
   const [editId, setEditId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [deleteModal, setDeleteModal] = useState<{ id: number; name: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ id: number; name: string } | null>(null);
 
   // MST lookup state
   const [taxLoading, setTaxLoading] = useState(false);
@@ -29,7 +31,7 @@ export default function Customers() {
   const [taxError, setTaxError] = useState('');
   const taxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [filter, setFilter] = useState<FilterState>({ ...defaultFilter, sortBy: 'purchased', sortDir: 'desc' });
   const [cardData, setCardData] = useState<HoloData | null>(null);
 
   const load = () => api.get('/customers').then((r) => setRows(r.data));
@@ -116,14 +118,14 @@ export default function Customers() {
     setOpen(false); setForm(emptyForm); setEditId(null); setTaxResult(null); load();
   };
 
-  const handleDelete = async (id: number, name: string) => {
-    if (isAdmin) {
-      if (!confirm(`Xóa khách hàng "${name}"?`)) return;
-      try { await api.delete(`/customers/${id}`); load(); }
-      catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
-    } else {
-      setDeleteModal({ id, name });
-    }
+  const handleDelete = (id: number, name: string) => {
+    if (isAdmin) setConfirmDelete({ id, name });
+    else setDeleteModal({ id, name });
+  };
+
+  const doDelete = async (id: number) => {
+    try { await api.delete(`/customers/${id}`); setConfirmDelete(null); load(); }
+    catch (err: any) { alert(err.response?.data?.error || 'Không thể xóa'); }
   };
 
   return (
@@ -243,11 +245,20 @@ export default function Customers() {
           </tr></thead>
           <tbody>
             {filtered.length === 0 && <tr className="empty-row"><td colSpan={6}>{rows.length === 0 ? 'Chưa có khách hàng' : 'Không tìm thấy kết quả'}</td></tr>}
-            {filtered.map((c) => (
-              <tr key={c.id}>
+            {filtered.map((c) => {
+              const rank = getCustomerRank(c.totalPurchased ?? 0);
+              return (
+              <tr key={c.id} style={rank ? { background: `${rank.color}08`, borderLeft: `2px solid ${rank.color}55` } : undefined}>
                 <td>
-                  <div className="c-bright fw7">{c.name}</div>
-                  {c.email && <div className="c-dim" style={{ fontSize: 10 }}>{c.email}</div>}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {rank && (
+                      <span title={rank.label} style={{ fontSize: 15, flexShrink: 0 }}>{rank.icon}</span>
+                    )}
+                    <div>
+                      <div className="c-bright fw7" style={rank ? { color: rank.color } : undefined}>{c.name}</div>
+                      {c.email && <div className="c-dim" style={{ fontSize: 10 }}>{c.email}</div>}
+                    </div>
+                  </div>
                 </td>
                 <td>
                   {c.companyName && <div style={{ fontSize: 11 }}>{c.companyName}</div>}
@@ -258,8 +269,13 @@ export default function Customers() {
                 <td>
                   {c.invoiceCount > 0 ? (
                     <>
-                      <div className="fw7 c-cyan">{fmt(c.totalPurchased)}</div>
+                      <div className="fw7" style={{ color: rank?.color ?? 'var(--cyan)' }}>{fmt(c.totalPurchased)}</div>
                       <div className="c-dim" style={{ fontSize: 10 }}>{c.invoiceCount} hóa đơn</div>
+                      {rank && (
+                        <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, marginTop: 3, color: rank.color, textTransform: 'uppercase' }}>
+                          {rank.icon} {rank.label}
+                        </div>
+                      )}
                     </>
                   ) : <span className="c-dim">—</span>}
                 </td>
@@ -272,10 +288,22 @@ export default function Customers() {
                   </button>
                 </div></td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+
+      {confirmDelete && (
+        <ConfirmModal
+          title={`Xóa khách hàng`}
+          message={`Bạn có chắc muốn xóa khách hàng "${confirmDelete.name}"?`}
+          warning="Toàn bộ dữ liệu liên quan (hóa đơn, thanh toán) sẽ không thể khôi phục."
+          confirmLabel="Xóa vĩnh viễn"
+          onConfirm={() => doDelete(confirmDelete.id)}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {deleteModal && (
         <RequestDeleteModal

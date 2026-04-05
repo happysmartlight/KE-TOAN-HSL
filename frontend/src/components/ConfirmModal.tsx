@@ -1,10 +1,16 @@
+import { useState } from 'react';
+
 interface Props {
   title: string;
   message?: string;
   warning?: string;
   confirmLabel?: string;
   confirmCls?: string;
-  onConfirm: () => void;
+  /** Nếu có, người dùng phải gõ đúng chuỗi này mới cho phép xác nhận */
+  typeToConfirm?: string;
+  /** Nếu true, yêu cầu nhập mật khẩu admin để xác nhận */
+  requirePassword?: boolean;
+  onConfirm: (password?: string) => void;
   onCancel: () => void;
 }
 
@@ -14,12 +20,21 @@ export default function ConfirmModal({
   warning,
   confirmLabel = 'Xác nhận',
   confirmCls = 'red',
+  typeToConfirm,
+  requirePassword,
   onConfirm,
   onCancel,
 }: Props) {
+  const [typed, setTyped] = useState('');
+  const [password, setPassword] = useState('');
+
+  const typedOk = !typeToConfirm || typed === typeToConfirm;
+  const passwordOk = !requirePassword || password.length > 0;
+  const canConfirm = typedOk && passwordOk;
+
   return (
     <div className="modal-bg" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420 }}>
         {/* Icon + Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <div style={{
@@ -42,7 +57,7 @@ export default function ConfirmModal({
         {/* Warning box */}
         {warning && (
           <div style={{
-            marginBottom: 18, padding: '8px 12px',
+            marginBottom: 14, padding: '8px 12px',
             background: 'rgba(255,160,0,0.08)',
             borderRadius: 4,
             border: '1px solid rgba(255,160,0,0.25)',
@@ -52,8 +67,50 @@ export default function ConfirmModal({
           </div>
         )}
 
+        {/* Typed confirmation */}
+        {typeToConfirm && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6 }}>
+              Gõ <span style={{ color: 'var(--red)', fontWeight: 700, fontFamily: 'monospace' }}>{typeToConfirm}</span> để xác nhận:
+            </div>
+            <input
+              className="inp"
+              autoFocus={!requirePassword}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              placeholder={typeToConfirm}
+              style={{ fontFamily: 'monospace', letterSpacing: 2 }}
+            />
+          </div>
+        )}
+
+        {/* Password confirmation */}
+        {requirePassword && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 6 }}>
+              Nhập mật khẩu Admin để xác nhận:
+            </div>
+            <input
+              className="inp"
+              type="password"
+              autoFocus
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && canConfirm && onConfirm(password)}
+              placeholder="••••••••"
+            />
+          </div>
+        )}
+
         <div className="form-actions">
-          <button className={`btn ${confirmCls}`} onClick={onConfirm}>[ {confirmLabel} ]</button>
+          <button
+            className={`btn ${confirmCls}`}
+            onClick={() => onConfirm(requirePassword ? password : undefined)}
+            disabled={!canConfirm}
+            style={!canConfirm ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+          >
+            [ {confirmLabel} ]
+          </button>
           <button className="btn ghost" onClick={onCancel}>[ Hủy ]</button>
         </div>
       </div>

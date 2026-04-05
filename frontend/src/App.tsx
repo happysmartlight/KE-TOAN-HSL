@@ -15,6 +15,7 @@ import Users from './pages/Users';
 import DeleteRequests from './pages/DeleteRequests';
 import Logs from './pages/Logs';
 import CashflowCategories from './pages/CashflowCategories';
+import SystemAdmin from './pages/SystemAdmin';
 import Login from './pages/Login';
 
 const NAV = [
@@ -41,6 +42,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/products': 'Sản phẩm', '/invoices': 'Hóa đơn bán', '/purchases': 'Nhập hàng',
   '/cashflow': 'Thu / Chi', '/reports': 'Báo cáo', '/users': 'Người dùng',
   '/logs': 'Log hệ thống', '/cashflow-categories': 'Danh mục Thu/Chi',
+  '/system-admin': 'Quản trị hệ thống',
 };
 
 function AppLayout() {
@@ -81,7 +83,11 @@ function AppLayout() {
       {/* ── Sidebar ── */}
       <aside className={`sidebar${sidebarOpen ? ' sidebar-open' : ''}`}>
         <div className="sidebar-logo">
-          <img src="/logo.svg" alt="Happy Smart Light" />
+          <div className="logo-text">
+            <span className="logo-prompt">{'>'}_</span>
+            <span className="logo-line1">HAPPY</span>
+            <span className="logo-line2">SMART<span className="logo-accent"> LIGHT</span></span>
+          </div>
         </div>
 
         <nav className="sidebar-nav">
@@ -126,6 +132,10 @@ function AppLayout() {
                   <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📋</span>
                   Log hệ thống
                 </NavLink>
+                <NavLink to="/system-admin" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>⚙</span>
+                  Quản trị dữ liệu
+                </NavLink>
               </div>
             </div>
           )}
@@ -166,6 +176,7 @@ function AppLayout() {
             <Route path="/delete-requests" element={<DeleteRequests />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/cashflow-categories" element={<CashflowCategories />} />
+            <Route path="/system-admin" element={<SystemAdmin />} />
           </Routes>
         </div>
       </div>
