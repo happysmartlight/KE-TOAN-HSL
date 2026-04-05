@@ -115,6 +115,7 @@ export default function Reports() {
   };
 
   const { from: activeFrom, to: activeTo } = getPeriodRange(periodType, year, month, quarter, from, to);
+  const maxVal = trend.length ? Math.max(...trend.map((t) => Math.max(t.revenue, t.income, 1))) : 1;
 
   return (
     <div>
