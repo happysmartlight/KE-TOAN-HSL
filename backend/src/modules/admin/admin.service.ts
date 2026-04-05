@@ -3,8 +3,27 @@ import bcrypt from 'bcryptjs';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { exec, spawn } from 'child_process';
 
 const prisma = new PrismaClient();
+
+// ── Tailscale setup state (in-memory, per server process) ──────────────────
+export type TailscalePhase =
+  | 'idle'          // chưa làm gì
+  | 'installing'    // đang chạy install.sh
+  | 'starting'      // tailscale up vừa chạy, chờ URL
+  | 'auth_pending'  // URL đã có, chờ user quét QR
+  | 'connected'     // xác thực xong, đã có IP
+  | 'error';        // thất bại
+
+export type TailscaleState = {
+  phase: TailscalePhase;
+  authUrl?: string;
+  error?: string;
+};
+
+let _tsState: TailscaleState = { phase: 'idle' };
+const URL_RE = /https:\/\/login\.tailscale\.com\/[^\s\n\r]+/;
 
 export type GroupName = 'customers' | 'suppliers' | 'products' | 'invoices' | 'purchases' | 'cashflow' | 'logs';
 
@@ -243,6 +262,124 @@ export const adminService = {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(RANK_CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
     return merged;
+  },
+
+  // ── Tailscale ──────────────────────────────────────────────────────────────
+
+  getTailscaleState(): TailscaleState & { tailscaleIPs: string[] } {
+    const { tailscaleIPs } = adminService.getNetworkInfo();
+    // Nếu đã có IP thật thì cập nhật phase dù process chưa exit
+    if (tailscaleIPs.length > 0 && _tsState.phase !== 'connected') {
+      _tsState = { phase: 'connected' };
+    }
+    return { ..._tsState, tailscaleIPs };
+  },
+
+  resetTailscaleState() {
+    _tsState = { phase: 'idle' };
+  },
+
+  startTailscaleSetup(): { ok: boolean; error?: string } {
+    if (os.platform() !== 'linux') {
+      return { ok: false, error: 'Chỉ hỗ trợ trên Linux / Raspberry Pi.' };
+    }
+    // Đã đang chạy → trả về OK luôn (frontend sẽ poll state)
+    if (_tsState.phase === 'installing' || _tsState.phase === 'starting' || _tsState.phase === 'auth_pending') {
+      return { ok: true };
+    }
+
+    _tsState = { phase: 'installing' };
+
+    (async () => {
+      try {
+        // Kiểm tra xem tailscale đã cài chưa
+        const installed = await new Promise<boolean>((resolve) =>
+          exec('which tailscale', (err) => resolve(!err))
+        );
+
+        if (!installed) {
+          await new Promise<void>((resolve, reject) =>
+            exec(
+              'curl -fsSL https://tailscale.com/install.sh | sh',
+              { timeout: 180_000 },
+              (err) => (err ? reject(err) : resolve())
+            )
+          );
+        }
+
+        _tsState = { phase: 'starting' };
+
+        // Chạy tailscale up, bắt URL xác thực từ stdout/stderr
+        const child = spawn('tailscale', ['up'], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+        const capture = (data: Buffer) => {
+          const text = data.toString();
+          const match = text.match(URL_RE);
+          if (match && _tsState.phase !== 'connected') {
+            _tsState = { phase: 'auth_pending', authUrl: match[0].trim() };
+          }
+          if (/success|already authenticated|logged in/i.test(text)) {
+            _tsState = { phase: 'connected' };
+          }
+        };
+
+        child.stdout.on('data', capture);
+        child.stderr.on('data', capture);
+
+        child.on('close', (code) => {
+          if (code === 0 || _tsState.phase === 'auth_pending') {
+            // Exit 0 = đã xác thực; nếu đang auth_pending thì giữ nguyên để frontend poll
+            if (code === 0) _tsState = { phase: 'connected' };
+          } else if (_tsState.phase !== 'connected') {
+            _tsState = { phase: 'error', error: `tailscale up thoát với code ${code}` };
+          }
+        });
+
+        // Timeout 10 phút
+        setTimeout(() => {
+          if (_tsState.phase === 'starting' || _tsState.phase === 'auth_pending') {
+            _tsState = { phase: 'error', error: 'Hết thời gian chờ (10 phút).' };
+            child.kill();
+          }
+        }, 600_000);
+      } catch (err: any) {
+        _tsState = { phase: 'error', error: err.message };
+      }
+    })();
+
+    return { ok: true };
+  },
+
+  getNetworkInfo() {
+    const interfaces = os.networkInterfaces();
+    const allIPs: string[] = [];
+
+    for (const addrs of Object.values(interfaces)) {
+      for (const addr of addrs || []) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          allIPs.push(addr.address);
+        }
+      }
+    }
+
+    // Tailscale uses 100.64.0.0/10 CGNAT range
+    const isTailscale = (ip: string) => {
+      const parts = ip.split('.').map(Number);
+      return parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
+    };
+
+    const tailscaleIPs = allIPs.filter(isTailscale);
+    const lanIPs = allIPs.filter((ip) => !isTailscale(ip));
+    const port = parseInt(process.env.PORT || '3001', 10);
+    const isProd = process.env.NODE_ENV === 'production';
+
+    return {
+      hostname: os.hostname(),
+      backendPort: port,
+      lanIPs,
+      tailscaleIPs,
+      isProd,
+    };
   },
 
   async purgeAll() {

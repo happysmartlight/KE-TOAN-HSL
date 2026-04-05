@@ -21,6 +21,7 @@ import AutoBackup from './pages/AutoBackup';
 import MyProfile from './pages/MyProfile';
 import RankConfig from './pages/RankConfig';
 import Login from './pages/Login';
+import NetworkSetup from './pages/NetworkSetup';
 import { setRankConfig } from './components/HoloCard';
 
 const NAV = [
@@ -49,6 +50,7 @@ const PAGE_NAMES: Record<string, string> = {
   '/requests': 'Quản lý yêu cầu', '/cashflow-categories': 'Danh mục Thu/Chi',
   '/rank-config':   'Cấu hình Rank',
   '/system-admin':  'Quản trị dữ liệu',
+  '/network-setup': 'Thiết lập mạng',
   '/system-health': 'Trạng thái server',
   '/auto-backup':   'Cài đặt Backup',
   '/my-profile': 'Hồ sơ của tôi',
@@ -189,6 +191,10 @@ function AppLayout() {
                   <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📂</span>
                   Danh mục Thu/Chi
                 </NavLink>
+                <NavLink to="/network-setup" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                  <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>🌐</span>
+                  Thiết lập mạng
+                </NavLink>
                 <NavLink to="/system-health" className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
                   <span style={{ fontSize: 14, width: 18, textAlign: 'center' }}>📡</span>
                   Trạng thái server
@@ -246,6 +252,7 @@ function AppLayout() {
             <Route path="/cashflow-categories" element={<CashflowCategories />} />
             <Route path="/rank-config" element={<RankConfig />} />
             <Route path="/system-admin" element={<SystemAdmin />} />
+            <Route path="/network-setup" element={<NetworkSetup />} />
             <Route path="/system-health" element={<SystemHealth />} />
             <Route path="/my-profile" element={<MyProfile />} />
             <Route path="/auto-backup" element={<AutoBackup />} />

@@ -60,6 +60,29 @@ export const adminController = {
     }
   },
 
+  getTailscaleState(_req: Request, res: Response) {
+    res.json(adminService.getTailscaleState());
+  },
+
+  startTailscaleSetup(_req: Request, res: Response) {
+    const result = adminService.startTailscaleSetup();
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ ok: true });
+  },
+
+  resetTailscaleState(_req: Request, res: Response) {
+    adminService.resetTailscaleState();
+    res.json({ ok: true });
+  },
+
+  getNetworkInfo(_req: Request, res: Response) {
+    try {
+      res.json(adminService.getNetworkInfo());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
   getRankConfig(_req: Request, res: Response) {
     try {
       res.json(adminService.getRankConfig());
