@@ -1,8 +1,10 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { adminController } from './admin.controller';
+import { getOnlineUsers } from '../../middleware/auth.middleware';
 
 export const adminRouter = Router();
 
+adminRouter.get('/online-users', (_req: Request, res: Response) => res.json(getOnlineUsers()));
 adminRouter.get('/stats',           adminController.getStats);
 adminRouter.get('/health',          adminController.getHealth);
 adminRouter.delete('/purge/:group', adminController.purgeGroup);

@@ -13,6 +13,8 @@ type HealthInfo = {
   disk: { total: number; free: number; used: number } | null;
 };
 
+type OnlineUser = { userId: number; username: string; name: string; role: string; ip: string; at: number };
+
 function fmtBytes(b: number) {
   if (b >= 1024 ** 3) return (b / 1024 ** 3).toFixed(2) + ' GB';
   if (b >= 1024 ** 2) return (b / 1024 ** 2).toFixed(2) + ' MB';
@@ -106,6 +108,8 @@ export default function SystemHealth() {
   const [startupStatus, setStartupStatus] = useState<{ configured: boolean } | null>(null);
   const [startupLoading, setStartupLoading] = useState(false);
   const [startupResult, setStartupResult] = useState<{ ok: boolean; message: string; command?: string } | null>(null);
+
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
 
   const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
 
@@ -213,8 +217,12 @@ export default function SystemHealth() {
 
   const load = async () => {
     try {
-      const r = await api.get('/admin/health');
-      setInfo(r.data);
+      const [healthRes, onlineRes] = await Promise.all([
+        api.get('/admin/health'),
+        api.get('/admin/online-users'),
+      ]);
+      setInfo(healthRes.data);
+      setOnlineUsers(onlineRes.data);
       setLastRefresh(new Date());
       setError('');
     } catch (err: any) {
@@ -372,6 +380,71 @@ export default function SystemHealth() {
 
         </div>
       )}
+
+      {/* ── Online users ── */}
+      <div className="form-panel" style={{ padding: '16px 18px', marginTop: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', letterSpacing: 1, textTransform: 'uppercase' }}>
+            👥 Nhân sự đang online
+          </div>
+          <span style={{
+            marginLeft: 8, padding: '2px 10px', borderRadius: 20,
+            background: onlineUsers.length > 0 ? 'rgba(0,255,136,0.12)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${onlineUsers.length > 0 ? 'rgba(0,255,136,0.35)' : 'rgba(255,255,255,0.08)'}`,
+            fontSize: 12, fontWeight: 700,
+            color: onlineUsers.length > 0 ? 'var(--green)' : 'var(--text-dim)',
+          }}>
+            {onlineUsers.length}
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--text-dim)', marginLeft: 4 }}>
+            (hoạt động trong 5 phút gần nhất)
+          </span>
+        </div>
+
+        {onlineUsers.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', fontStyle: 'italic' }}>
+            Không có ai đang hoạt động.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {onlineUsers.map((u) => {
+              const secsAgo = Math.floor((Date.now() - u.at) / 1000);
+              const ago = secsAgo < 60 ? `${secsAgo}s trước` : `${Math.floor(secsAgo / 60)}m trước`;
+              return (
+                <div key={u.userId} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '7px 10px', borderRadius: 4,
+                  background: 'rgba(0,245,255,0.03)', border: '1px solid rgba(0,245,255,0.08)',
+                }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: 'var(--green)', boxShadow: '0 0 6px var(--green)',
+                    display: 'inline-block',
+                  }} />
+                  <span style={{ fontWeight: 700, color: u.role === 'admin' ? 'var(--cyan)' : 'var(--text-bright)', fontSize: 13, minWidth: 120 }}>
+                    {u.name}
+                  </span>
+                  <span className="tag" style={{
+                    fontSize: 9, padding: '1px 6px',
+                    background: u.role === 'admin' ? 'rgba(0,245,255,0.1)' : 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${u.role === 'admin' ? 'rgba(0,245,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    color: u.role === 'admin' ? 'var(--cyan)' : 'var(--text-dim)',
+                    borderRadius: 3, textTransform: 'uppercase', letterSpacing: 1,
+                  }}>
+                    {u.role === 'admin' ? 'admin' : 'nhân viên'}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'monospace', marginLeft: 'auto' }}>
+                    {u.ip}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+                    {ago}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Auto-refresh note */}
       <div style={{ marginTop: 20, fontSize: 10, color: 'var(--text-dim)', textAlign: 'center', letterSpacing: 1 }}>

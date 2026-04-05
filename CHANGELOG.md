@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.2] — 2026-04-06
+
+### Tính năng mới
+
+#### Trạng thái hệ thống — Hiển thị nhân sự đang online
+- Panel **"👥 Nhân sự đang online"** trong tab Trạng thái server
+- Hiển thị số lượng người đang hoạt động (badge xanh lá)
+- Danh sách từng người: tên, vai trò (admin / nhân viên), địa chỉ IP, thời gian hoạt động gần nhất
+- Tính "online" = có gửi request trong vòng **5 phút** gần nhất
+- Cơ chế: `auth.middleware.ts` ghi `lastSeen` theo userId mỗi request xác thực (bỏ qua `/health`)
+- Endpoint mới: `GET /api/admin/online-users` (chỉ admin)
+- Tự động làm mới cùng chu kỳ 10 giây của trang Trạng thái server
+
+---
+
 ## [0.3.1] — 2026-04-06
 
 ### Sửa lỗi
