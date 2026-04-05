@@ -146,7 +146,7 @@ export const dashboardService = {
       invoiceCount:   g._count.id,
     }));
 
-    // ── 8. Top staff by invoices created (KPI) ──
+    // ── 8. Top 3 staff by revenue (always 3, pad with 0 if needed) ──
     const staffInvoiceGroups = await prisma.invoice.groupBy({
       by: ['createdByUserId'],
       where: {
@@ -159,22 +159,23 @@ export const dashboardService = {
       },
       _sum:   { totalAmount: true },
       _count: { id: true },
-      orderBy: { _sum: { totalAmount: 'desc' } },
-      take: 3,
     });
-    const staffIds = staffInvoiceGroups.map((g) => g.createdByUserId!);
-    const staffInfos = await prisma.user.findMany({
-      where: { id: { in: staffIds } },
+    const allActiveUsers = await prisma.user.findMany({
       select: { id: true, name: true, role: true },
     });
-    const staffMap = Object.fromEntries(staffInfos.map((s) => [s.id, s]));
-    const topStaff = staffInvoiceGroups.map((g) => ({
-      id:           g.createdByUserId!,
-      name:         staffMap[g.createdByUserId!]?.name || '(Ẩn)',
-      role:         staffMap[g.createdByUserId!]?.role || 'staff',
-      totalRevenue: g._sum.totalAmount || 0,
-      invoiceCount: g._count.id,
-    }));
+    const revenueMap = Object.fromEntries(
+      staffInvoiceGroups.map((g) => [g.createdByUserId!, { revenue: g._sum.totalAmount || 0, count: g._count.id }])
+    );
+    const topStaff = allActiveUsers
+      .map((u) => ({
+        id:           u.id,
+        name:         u.name,
+        role:         u.role,
+        totalRevenue: revenueMap[u.id]?.revenue ?? 0,
+        invoiceCount: revenueMap[u.id]?.count ?? 0,
+      }))
+      .sort((a, b) => b.totalRevenue - a.totalRevenue)
+      .slice(0, 3);
 
     // ── 9. Summary KPIs ──
     const totalIncome   = allCashflow.filter((c) => c.type === 'income').reduce((s, c) => s + c.amount, 0);
