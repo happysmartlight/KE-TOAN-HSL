@@ -1,5 +1,7 @@
 # Kế Toán Nội Bộ
 
+[![CI](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg)](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml)
+
 Hệ thống kế toán nội bộ cho doanh nghiệp nhỏ.
 
 **Stack:** Node.js · TypeScript · Express · Prisma · SQLite · React · Vite
