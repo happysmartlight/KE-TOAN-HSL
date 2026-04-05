@@ -97,7 +97,7 @@ export const adminService = {
   },
 
   getHealth() {
-    const DB_PATH = path.join(__dirname, '../../../../prisma/dev.db');
+    const DB_PATH = path.join(__dirname, '../../../prisma/dev.db');
     const uptimeSeconds = process.uptime();
     const totalMem = os.totalmem();
     const freeMem  = os.freemem();
