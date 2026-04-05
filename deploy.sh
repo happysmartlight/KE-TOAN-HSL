@@ -22,7 +22,7 @@ echo ""
 # --- Backend ---
 log "Cài backend dependencies..."
 cd "$BACKEND_DIR"
-npm install
+npm install --include=dev
 
 log "Prisma generate..."
 npx prisma generate
@@ -36,7 +36,7 @@ npm run build
 # --- Frontend ---
 log "Cài frontend dependencies..."
 cd "$FRONTEND_DIR"
-npm install
+npm install --include=dev
 
 log "Build frontend..."
 npm run build
