@@ -116,20 +116,6 @@ export default function Reports() {
 
   const { from: activeFrom, to: activeTo } = getPeriodRange(periodType, year, month, quarter, from, to);
 
-  // bar chart helper
-  const maxVal = trend.length ? Math.max(...trend.map((t) => Math.max(t.revenue, t.income, 1))) : 1;
-  const _bar = (val: number, color: string) => (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-      <div style={{ width: '100%', height: 60, display: 'flex', alignItems: 'flex-end' }}>
-        <div style={{
-          width: '100%', background: color, borderRadius: '2px 2px 0 0',
-          height: `${Math.max(2, (val / maxVal) * 60)}px`,
-          boxShadow: `0 0 6px ${color}`,
-        }} />
-      </div>
-    </div>
-  );
-
   return (
     <div>
       <div className="page-header">
