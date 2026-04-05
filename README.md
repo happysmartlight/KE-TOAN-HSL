@@ -1,6 +1,6 @@
 # Kế Toán Nội Bộ
 
-[![CI](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg)](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml)
+[![CI](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml)
 
 Hệ thống kế toán nội bộ cho doanh nghiệp nhỏ.
 
