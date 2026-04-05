@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import api from '../api';
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -65,8 +65,19 @@ function StatusDot({ ok }: { ok: boolean }) {
   );
 }
 
+type UpdatePhase = 'idle' | 'checking' | 'up_to_date' | 'update_available' | 'updating' | 'success' | 'error';
+type UpdateState = {
+  phase: UpdatePhase;
+  currentCommit?: string;
+  remoteCommit?: string;
+  commitsBehind?: number;
+  logs: string[];
+  error?: string;
+  checkedAt?: number;
+};
+
 export default function SystemHealth() {
-  const [tab, setTab] = useState<'status' | 'logs'>('status');
+  const [tab, setTab] = useState<'status' | 'logs' | 'update'>('status');
   const [info, setInfo] = useState<HealthInfo | null>(null);
   const [error, setError] = useState('');
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -76,6 +87,67 @@ export default function SystemHealth() {
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsLoading, setLogsLoading] = useState(false);
   const [logLevel, setLogLevel] = useState('');
+
+  // Update state
+  const [upd, setUpd] = useState<UpdateState>({ phase: 'idle', logs: [] });
+  const [updBusy, setUpdBusy] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const logBoxRef = useRef<HTMLDivElement | null>(null);
+
+  const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+
+  const fetchUpdState = async (): Promise<boolean> => {
+    try {
+      const r = await api.get('/admin/update/state');
+      setUpd(r.data);
+      setRestarting(false);
+      if (logBoxRef.current) logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
+      const done = ['idle', 'up_to_date', 'update_available', 'success', 'error'].includes(r.data.phase);
+      return done;
+    } catch {
+      // Server restarting after deploy
+      setRestarting(true);
+      return false;
+    }
+  };
+
+  const startPoll = () => {
+    stopPoll();
+    pollRef.current = setInterval(async () => {
+      const done = await fetchUpdState();
+      if (done) stopPoll();
+    }, 2000);
+  };
+
+  const handleCheck = async () => {
+    setUpdBusy(true);
+    try {
+      await api.post('/admin/update/check');
+      const r = await api.get('/admin/update/state');
+      setUpd(r.data);
+    } catch (err: any) {
+      setUpd(prev => ({ ...prev, phase: 'error', error: err.response?.data?.error || 'Lỗi kết nối' }));
+    } finally { setUpdBusy(false); }
+  };
+
+  const handleUpdate = async () => {
+    setUpdBusy(true);
+    try {
+      await api.post('/admin/update/start');
+      setUpd(prev => ({ ...prev, phase: 'updating', logs: [] }));
+      startPoll();
+    } catch (err: any) {
+      setUpd(prev => ({ ...prev, phase: 'error', error: err.response?.data?.error || 'Lỗi kết nối' }));
+    } finally { setUpdBusy(false); }
+  };
+
+  useEffect(() => {
+    if (tab === 'update') fetchUpdState();
+    return () => { if (tab !== 'update') stopPoll(); };
+  }, [tab]);
+
+  useEffect(() => () => stopPoll(), []);
 
   const loadLogs = async () => {
     setLogsLoading(true);
@@ -124,17 +196,23 @@ export default function SystemHealth() {
           )}
           {tab === 'status' && <button className="btn ghost btn-sm" onClick={load}>↻ Làm mới</button>}
           {tab === 'logs'   && <button className="btn ghost btn-sm" onClick={loadLogs}>↻ Tải lại</button>}
+          {tab === 'update' && <button className="btn ghost btn-sm" onClick={fetchUpdState}>↻ Làm mới</button>}
         </div>
       </div>
 
-      {/* Tab switcher */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         <button className={`btn ${tab === 'status' ? 'cyan' : 'ghost'}`} style={{ borderRadius: '4px 0 0 4px' }} onClick={() => setTab('status')}>
           📡 Trạng thái server
         </button>
-        <button className={`btn ${tab === 'logs' ? 'cyan' : 'ghost'}`} style={{ borderRadius: '0 4px 4px 0' }} onClick={() => setTab('logs')}>
+        <button className={`btn ${tab === 'logs' ? 'cyan' : 'ghost'}`} style={{ borderRadius: 0 }} onClick={() => setTab('logs')}>
           📋 Log hệ thống
           {logsTotal > 0 && <span className="c-dim" style={{ fontSize: 10, marginLeft: 6 }}>({logsTotal})</span>}
+        </button>
+        <button className={`btn ${tab === 'update' ? 'cyan' : 'ghost'}`} style={{ borderRadius: '0 4px 4px 0' }} onClick={() => setTab('update')}>
+          🔄 Cập nhật
+          {upd.phase === 'update_available' && upd.commitsBehind && upd.commitsBehind > 0 && (
+            <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--yellow)' }}>+{upd.commitsBehind}</span>
+          )}
         </button>
       </div>
 
@@ -285,6 +363,131 @@ export default function SystemHealth() {
             </div>
           )}
           <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 8 }}>Hiển thị 100 bản ghi gần nhất · Tổng: {logsTotal}</div>
+        </div>
+      )}
+
+      {tab === 'update' && (
+        <div>
+          {/* Status banner */}
+          {(() => {
+            const phaseLabel: Record<UpdatePhase, string> = {
+              idle: 'Chưa kiểm tra',
+              checking: 'Đang kiểm tra...',
+              up_to_date: '✔ Đã là phiên bản mới nhất',
+              update_available: '⬆ Có phiên bản mới',
+              updating: '⏳ Đang cập nhật...',
+              success: '✔ Cập nhật hoàn tất',
+              error: '✗ Lỗi',
+            };
+            const phaseColor: Record<UpdatePhase, string> = {
+              idle: 'var(--text-dim)',
+              checking: 'var(--cyan)',
+              up_to_date: 'var(--green)',
+              update_available: 'var(--yellow)',
+              updating: 'var(--cyan)',
+              success: 'var(--green)',
+              error: 'var(--red)',
+            };
+            return (
+              <div className="form-panel mb-16" style={{ padding: '14px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: phaseColor[upd.phase] }}>
+                    {phaseLabel[upd.phase]}
+                  </div>
+                  {restarting && (
+                    <span style={{ fontSize: 11, color: 'var(--yellow)' }}>⟳ Đang khởi động lại server...</span>
+                  )}
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                    <button
+                      className="btn ghost btn-sm"
+                      onClick={handleCheck}
+                      disabled={updBusy || upd.phase === 'checking' || upd.phase === 'updating'}
+                    >
+                      {upd.phase === 'checking' ? '...' : '🔍 Kiểm tra cập nhật'}
+                    </button>
+                    {upd.phase === 'update_available' && (
+                      <button
+                        className="btn yellow btn-sm"
+                        onClick={handleUpdate}
+                        disabled={updBusy}
+                      >
+                        ⬆ Cập nhật ngay
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {(upd.currentCommit || upd.remoteCommit) && (
+                  <div style={{ display: 'flex', gap: '6px 24px', flexWrap: 'wrap', marginTop: 10, fontSize: 11 }}>
+                    {upd.currentCommit && (
+                      <span><span className="c-dim">Hiện tại: </span><span style={{ fontFamily: 'monospace', color: 'var(--cyan)' }}>{upd.currentCommit}</span></span>
+                    )}
+                    {upd.remoteCommit && (
+                      <span><span className="c-dim">Mới nhất: </span><span style={{ fontFamily: 'monospace', color: 'var(--green)' }}>{upd.remoteCommit}</span></span>
+                    )}
+                    {upd.commitsBehind !== undefined && upd.commitsBehind > 0 && (
+                      <span><span className="c-dim">Chậm hơn: </span><span style={{ color: 'var(--yellow)', fontWeight: 700 }}>{upd.commitsBehind} commit</span></span>
+                    )}
+                    {upd.checkedAt && (
+                      <span className="c-dim" style={{ marginLeft: 'auto' }}>
+                        Kiểm tra lúc: {new Date(upd.checkedAt).toLocaleTimeString('vi-VN')}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {upd.phase === 'error' && upd.error && (
+                  <div style={{ marginTop: 10, fontSize: 11, color: 'var(--red)' }}>✗ {upd.error}</div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Live log */}
+          {upd.logs.length > 0 && (
+            <div className="form-panel" style={{ padding: '12px 16px' }}>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' }}>
+                📄 Log cập nhật
+              </div>
+              <div
+                ref={logBoxRef}
+                style={{
+                  fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7,
+                  maxHeight: 360, overflowY: 'auto',
+                  background: 'rgba(0,0,0,0.3)', borderRadius: 4, padding: '10px 12px',
+                  border: '1px solid rgba(0,245,255,0.08)',
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                }}
+              >
+                {upd.logs.map((line, i) => {
+                  const isErr = /error|fail|✗|exit [^0]/i.test(line);
+                  const isOk  = /✔|success|hoàn tất|xong/i.test(line);
+                  const color = isErr ? 'var(--red)' : isOk ? 'var(--green)' : 'var(--text-bright)';
+                  return (
+                    <div key={i} style={{ color }}>{line}</div>
+                  );
+                })}
+                {(upd.phase === 'updating' || restarting) && (
+                  <div style={{ color: 'var(--cyan)', animation: 'blink 1s step-end infinite' }}>▋</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {upd.phase === 'idle' && (
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 8, fontStyle: 'italic' }}>
+              Nhấn "Kiểm tra cập nhật" để so sánh với branch master trên GitHub.
+            </div>
+          )}
+          {upd.phase === 'success' && (
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--green)' }}>
+              ✔ Hệ thống đã được cập nhật và khởi động lại thành công.
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, fontSize: 10, color: 'var(--text-dim)', fontStyle: 'italic' }}>
+            * Tính năng cập nhật chỉ hoạt động trên Linux / Raspberry Pi. Windows chỉ có thể kiểm tra phiên bản.
+          </div>
         </div>
       )}
     </div>
