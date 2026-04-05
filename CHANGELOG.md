@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.1] — 2026-04-06
+
+### Sửa lỗi
+
+#### Nút Copy không hoạt động khi truy cập qua HTTP (LAN/IP)
+- **Nguyên nhân**: `navigator.clipboard.writeText` chỉ hoạt động trên HTTPS hoặc `localhost`. Khi truy cập qua địa chỉ IP nội bộ (`http://192.168.x.x`) thì `navigator.clipboard` là `undefined`, dẫn đến lỗi JS.
+- **Sửa**: `clipboard.ts` kiểm tra tường minh `navigator.clipboard` trước khi gọi, tự động fallback sang `document.execCommand('copy')` (hoạt động trên HTTP).
+- **Fallback cuối**: nếu cả `execCommand` không được hỗ trợ (trình duyệt cũ) → hiện hộp `prompt` để người dùng tự copy thủ công.
+- Áp dụng cho tất cả nút **Copy** trong toàn hệ thống (Thiết lập mạng, trang Login, v.v.).
+
+---
+
 ## [0.3.0] — 2026-04-05
 
 ### Tính năng mới

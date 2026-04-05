@@ -1,6 +1,7 @@
 /** Copy text to clipboard with fallback for HTTP context (no secure context) */
 export function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
+  // navigator.clipboard only works on HTTPS or localhost
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
     return navigator.clipboard.writeText(text);
   }
   // Fallback: textarea + execCommand (works on HTTP / non-secure context)
@@ -11,13 +12,9 @@ export function copyToClipboard(text: string): Promise<void> {
     document.body.appendChild(ta);
     ta.focus();
     ta.select();
-    try {
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      resolve();
-    } catch {
-      document.body.removeChild(ta);
-      reject(new Error('Copy not supported'));
-    }
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) resolve();
+    else reject(new Error('Copy không được hỗ trợ trên trình duyệt này'));
   });
 }

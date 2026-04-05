@@ -40,10 +40,12 @@ function StatusRow({ label, ok, detail }: { label: string; ok: boolean | null; d
 function CopyBox({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () =>
-    copyToClipboard(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+    copyToClipboard(url)
+      .then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })
+      .catch(() => {
+        // Fallback cuối: prompt để user tự copy
+        window.prompt('Không thể copy tự động. Hãy copy thủ công:', url);
+      });
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
