@@ -160,7 +160,7 @@ export const dashboardService = {
       _sum:   { totalAmount: true },
       _count: { id: true },
       orderBy: { _sum: { totalAmount: 'desc' } },
-      take: 10,
+      take: 3,
     });
     const staffIds = staffInvoiceGroups.map((g) => g.createdByUserId!);
     const staffInfos = await prisma.user.findMany({
