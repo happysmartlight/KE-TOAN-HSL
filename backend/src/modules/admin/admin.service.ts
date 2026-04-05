@@ -38,8 +38,10 @@ export type UpdatePhase =
 export type UpdateState = {
   phase: UpdatePhase;
   currentCommit?: string;
+  currentMessage?: string;
   remoteCommit?: string;
   commitsBehind?: number;
+  newCommits?: string[];
   logs: string[];
   error?: string;
   checkedAt?: number;
@@ -417,17 +419,22 @@ export const adminService = {
     _updateState = { phase: 'checking', logs: [] };
     try {
       await _run(`git -C "${PROJECT_ROOT}" fetch origin master`);
-      const [current, remote, countStr] = await Promise.all([
+      const [current, remote, countStr, newLog, currentMsg] = await Promise.all([
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`),
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short origin/master`),
         _run(`git -C "${PROJECT_ROOT}" rev-list HEAD..origin/master --count`),
+        _run(`git -C "${PROJECT_ROOT}" log HEAD..origin/master --oneline --no-decorate`).catch(() => ''),
+        _run(`git -C "${PROJECT_ROOT}" log HEAD -1 --pretty=format:%s`).catch(() => ''),
       ]);
       const commitsBehind = parseInt(countStr, 10) || 0;
+      const newCommits = newLog ? newLog.split('\n').filter(Boolean) : [];
       _updateState = {
         phase: commitsBehind > 0 ? 'update_available' : 'up_to_date',
         currentCommit: current,
+        currentMessage: currentMsg || undefined,
         remoteCommit: remote,
         commitsBehind,
+        newCommits,
         logs: [],
         checkedAt: Date.now(),
       };

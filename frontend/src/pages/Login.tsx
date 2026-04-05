@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { APP_VERSION, APP_NAME } from '../version';
 import api from '../api';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface DebugInfo {
   apiUrl: string;
@@ -187,7 +188,7 @@ export default function Login() {
                   <div style={{ padding: '6px 10px', borderTop: '1px solid rgba(255,204,0,0.1)', display: 'flex', justifyContent: 'flex-end' }}>
                     <button
                       type="button"
-                      onClick={() => navigator.clipboard?.writeText(debugText).then(() => alert('Đã copy!'))}
+                      onClick={() => copyToClipboard(debugText).then(() => alert('Đã copy!')).catch(() => {})}
                       style={{ background: 'rgba(255,204,0,0.1)', border: '1px solid rgba(255,204,0,0.25)', color: '#ffcc00', fontSize: 10, cursor: 'pointer', borderRadius: 3, padding: '3px 10px' }}
                     >
                       📋 Copy

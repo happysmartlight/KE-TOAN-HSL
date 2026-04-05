@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../api';
+import { copyToClipboard } from '../utils/clipboard';
 
 type NetworkInfo = {
   hostname: string;
@@ -39,7 +40,7 @@ function StatusRow({ label, ok, detail }: { label: string; ok: boolean | null; d
 function CopyBox({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   const copy = () =>
-    navigator.clipboard.writeText(url).then(() => {
+    copyToClipboard(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });

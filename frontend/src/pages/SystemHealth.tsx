@@ -69,8 +69,10 @@ type UpdatePhase = 'idle' | 'checking' | 'up_to_date' | 'update_available' | 'up
 type UpdateState = {
   phase: UpdatePhase;
   currentCommit?: string;
+  currentMessage?: string;
   remoteCommit?: string;
   commitsBehind?: number;
+  newCommits?: string[];
   logs: string[];
   error?: string;
   checkedAt?: number;
@@ -248,15 +250,15 @@ export default function SystemHealth() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-        <button className={`btn ${tab === 'status' ? 'cyan' : 'ghost'}`} style={{ borderRadius: '4px 0 0 4px' }} onClick={() => setTab('status')}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button className={`btn ${tab === 'status' ? 'cyan' : 'ghost'}`} style={{ flex: '1 1 auto', borderRadius: 4 }} onClick={() => setTab('status')}>
           📡 Trạng thái server
         </button>
-        <button className={`btn ${tab === 'logs' ? 'cyan' : 'ghost'}`} style={{ borderRadius: 0 }} onClick={() => setTab('logs')}>
+        <button className={`btn ${tab === 'logs' ? 'cyan' : 'ghost'}`} style={{ flex: '1 1 auto', borderRadius: 4 }} onClick={() => setTab('logs')}>
           📋 Log hệ thống
           {logsTotal > 0 && <span className="c-dim" style={{ fontSize: 10, marginLeft: 6 }}>({logsTotal})</span>}
         </button>
-        <button className={`btn ${tab === 'update' ? 'cyan' : 'ghost'}`} style={{ borderRadius: '0 4px 4px 0' }} onClick={() => setTab('update')}>
+        <button className={`btn ${tab === 'update' ? 'cyan' : 'ghost'}`} style={{ flex: '1 1 auto', borderRadius: 4 }} onClick={() => setTab('update')}>
           🔄 Cập nhật
           {upd.phase === 'update_available' && upd.commitsBehind && upd.commitsBehind > 0 && (
             <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--yellow)' }}>+{upd.commitsBehind}</span>
@@ -522,7 +524,7 @@ export default function SystemHealth() {
                   {restarting && (
                     <span style={{ fontSize: 11, color: 'var(--yellow)' }}>⟳ Đang khởi động lại server...</span>
                   )}
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
                       className="btn ghost btn-sm"
                       onClick={handleCheck}
@@ -545,7 +547,11 @@ export default function SystemHealth() {
                 {(upd.currentCommit || upd.remoteCommit) && (
                   <div style={{ display: 'flex', gap: '6px 24px', flexWrap: 'wrap', marginTop: 10, fontSize: 11 }}>
                     {upd.currentCommit && (
-                      <span><span className="c-dim">Hiện tại: </span><span style={{ fontFamily: 'monospace', color: 'var(--cyan)' }}>{upd.currentCommit}</span></span>
+                      <span>
+                        <span className="c-dim">Hiện tại: </span>
+                        <span style={{ fontFamily: 'monospace', color: 'var(--cyan)' }}>{upd.currentCommit}</span>
+                        {upd.currentMessage && <span className="c-dim"> — {upd.currentMessage}</span>}
+                      </span>
                     )}
                     {upd.remoteCommit && (
                       <span><span className="c-dim">Mới nhất: </span><span style={{ fontFamily: 'monospace', color: 'var(--green)' }}>{upd.remoteCommit}</span></span>
@@ -558,6 +564,22 @@ export default function SystemHealth() {
                         Kiểm tra lúc: {new Date(upd.checkedAt).toLocaleTimeString('vi-VN')}
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* New commits list */}
+                {upd.newCommits && upd.newCommits.length > 0 && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      📝 {upd.newCommits.length} thay đổi mới:
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7 }}>
+                      {upd.newCommits.map((c, i) => (
+                        <div key={i} style={{ color: 'var(--text-bright)' }}>
+                          <span style={{ color: 'var(--cyan)', marginRight: 8 }}>▸</span>{c}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
