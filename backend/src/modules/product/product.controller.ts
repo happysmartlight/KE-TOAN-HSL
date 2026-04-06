@@ -46,4 +46,13 @@ export const productController = {
       res.status(500).json({ error: 'Lỗi server' });
     }
   },
+
+  async getDashboard(req: Request, res: Response) {
+    try {
+      const days = req.query.days ? Number(req.query.days) : 30;
+      res.json(await productService.getDashboard(days));
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Lỗi server' });
+    }
+  },
 };

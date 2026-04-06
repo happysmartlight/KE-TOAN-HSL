@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.3] — 2026-04-06
+
+### Tính năng mới
+
+#### Trang Sản phẩm — Tab "Phân tích & Báo cáo" (Product Dashboard)
+- Tách trang Sản phẩm thành **2 tab**: Danh sách (giữ nguyên) và Phân tích & Báo cáo
+- **API mới**: `GET /api/products/dashboard?days=N` — tổng hợp dữ liệu từ InventoryLog và InvoiceItem, không tính toán dư thừa từ bảng products
+- **Summary cards** (5 thẻ): Tổng SP, Tổng tồn kho, Giá trị tồn kho, Sắp hết hàng, Hết hàng — click vào thẻ cảnh báo để jump sang tab Danh sách với filter tương ứng
+- **Biểu đồ nhập/xuất kho** theo ngày (LineChart) — chọn kỳ 7/30/90 ngày
+- **Biểu đồ top doanh thu** (BarChart ngang) — top 7 sản phẩm mọi thời gian
+- **Danh sách bán chạy nhất**: ranked list với progress bar tỉ lệ + rank icon
+- **Danh sách tồn kho thấp** (≤5): nút "Xem tất cả" jump sang tab Danh sách filter `low`
+- **Danh sách không bán trong N ngày**: hiển thị ngày bán cuối + số ngày trôi qua
+- Selector kỳ phân tích (7/30/90 ngày) ảnh hưởng đồng thời chart nhập/xuất và danh sách không bán
+- Skeleton loading state đầy đủ khi đang tải
+- Indicator filter (khi jump từ dashboard → danh sách) kèm nút "Bỏ lọc"
+
+---
+
 ## [0.3.2] — 2026-04-06
 
 ### Tính năng mới
