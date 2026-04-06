@@ -155,18 +155,25 @@ export const adminService = {
     };
   },
 
-  getHealth() {
-    const DB_PATH = path.join(__dirname, '../../../prisma/dev.db');
+  async getHealth() {
     const uptimeSeconds = process.uptime();
     const totalMem = os.totalmem();
     const freeMem  = os.freemem();
 
+    // Lấy kích thước DB từ MariaDB information_schema
     let dbSize = 0;
-    try { dbSize = fs.statSync(DB_PATH).size; } catch {}
+    try {
+      const result = await prisma.$queryRaw<[{ size: bigint }]>`
+        SELECT SUM(data_length + index_length) AS size
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+      `;
+      dbSize = Number(result[0]?.size ?? 0);
+    } catch {}
 
     let disk: { total: number; free: number; used: number } | null = null;
     try {
-      const statfs = (fs as any).statfsSync?.(path.dirname(DB_PATH));
+      const statfs = (fs as any).statfsSync?.('/');
       if (statfs) {
         disk = {
           total: statfs.bsize * statfs.blocks,

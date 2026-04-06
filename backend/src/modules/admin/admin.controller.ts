@@ -28,9 +28,9 @@ export const adminController = {
     }
   },
 
-  getHealth(_req: Request, res: Response) {
+  async getHealth(_req: Request, res: Response) {
     try {
-      res.json(adminService.getHealth());
+      res.json(await adminService.getHealth());
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

@@ -1,11 +1,14 @@
 import fs from 'fs';
 import path from 'path';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import cron, { ScheduledTask } from 'node-cron';
 import { encryptBuffer } from '../../utils/backupCrypto';
 import { writeLog } from '../../utils/logger';
 
-const DB_PATH      = path.join(__dirname, '../../../prisma/dev.db');
-const CONFIG_PATH  = path.join(__dirname, '../../../prisma/backup-config.json');
+const execFileAsync = promisify(execFile);
+
+const CONFIG_PATH   = path.join(__dirname, '../../../prisma/backup-config.json');
 export const BACKUP_DIR = path.join(__dirname, '../../../backups');
 
 export interface BackupConfig {
@@ -25,6 +28,19 @@ const DEFAULT_CONFIG: BackupConfig = {
 };
 
 let cronTask: ScheduledTask | null = null;
+
+/** Parse DATABASE_URL dạng mysql://user:pass@host:port/dbname */
+function parseDbUrl(url: string) {
+  const match = url.match(/^mysql:\/\/([^:]+):([^@]*)@([^:]+):(\d+)\/(.+)$/);
+  if (!match) throw new Error('DATABASE_URL không đúng định dạng mysql://user:pass@host:port/dbname');
+  return {
+    user:     match[1],
+    password: match[2],
+    host:     match[3],
+    port:     match[4],
+    database: match[5],
+  };
+}
 
 export const backupService = {
   getConfig(): BackupConfig {
@@ -50,7 +66,7 @@ export const backupService = {
   listBackups(): { filename: string; size: number; createdAt: string; encrypted: boolean }[] {
     this.ensureBackupDir();
     return fs.readdirSync(BACKUP_DIR)
-      .filter((f) => f.startsWith('backup-') && (f.endsWith('.db') || f.endsWith('.db.enc')))
+      .filter((f) => f.startsWith('backup-') && (f.endsWith('.sql') || f.endsWith('.sql.enc')))
       .map((f) => {
         const stat = fs.statSync(path.join(BACKUP_DIR, f));
         return {
@@ -67,14 +83,27 @@ export const backupService = {
   async performBackup(triggeredBy: 'manual' | 'cron' = 'cron'): Promise<string> {
     this.ensureBackupDir();
     const config = this.getConfig();
-    if (!fs.existsSync(DB_PATH)) throw new Error('Database không tìm thấy');
 
+    const db = parseDbUrl(process.env.DATABASE_URL || '');
     const ts  = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const ext = config.encrypt && config.password ? '.db.enc' : '.db';
+    const ext = config.encrypt && config.password ? '.sql.enc' : '.sql';
     const filename = `backup-${ts}${ext}`;
     const destPath = path.join(BACKUP_DIR, filename);
 
-    let data = fs.readFileSync(DB_PATH);
+    // Chạy mysqldump
+    const args = [
+      `--host=${db.host}`,
+      `--port=${db.port}`,
+      `--user=${db.user}`,
+      `--password=${db.password}`,
+      '--single-transaction',
+      '--routines',
+      '--triggers',
+      db.database,
+    ];
+    const { stdout } = await execFileAsync('mysqldump', args);
+    let data: Buffer = Buffer.from(stdout, 'utf-8');
+
     if (config.encrypt && config.password) {
       data = Buffer.from(encryptBuffer(data, config.password));
     }

@@ -3,6 +3,8 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { execFile, spawn } from 'child_process';
+import { promisify } from 'util';
 import { customerRouter } from './modules/customer/customer.route';
 import { invoiceRouter } from './modules/invoice/invoice.route';
 import { cashflowRouter } from './modules/cashflow/cashflow.route';
@@ -25,9 +27,16 @@ import { requireAuth, requireAdmin } from './middleware/auth.middleware';
 import { writeLog } from './utils/logger';
 import { encryptBuffer, decryptBuffer, isEncrypted } from './utils/backupCrypto';
 
+const execFileAsync = promisify(execFile);
+
 export const app = express();
 
-const DB_PATH = path.join(__dirname, '../prisma/dev.db');
+/** Parse DATABASE_URL dạng mysql://user:pass@host:port/dbname */
+function parseDbUrl(url: string) {
+  const match = url.match(/^mysql:\/\/([^:]+):([^@]*)@([^:]+):(\d+)\/(.+)$/);
+  if (!match) throw new Error('DATABASE_URL không đúng định dạng');
+  return { user: match[1], password: match[2], host: match[3], port: match[4], database: match[5] };
+}
 
 // Allow all origins — needed for LAN mobile access
 app.use(cors({ origin: '*' }));
@@ -84,22 +93,34 @@ app.use('/api/profile-update-requests', requireAuth, purRouter);
 app.use('/api/admin',  requireAdmin, adminRouter);
 app.use('/api/backup', requireAdmin, backupRouter);
 
-// ── Backup — tải về file db ──
+// ── Backup — tải về file .sql ──
 app.get('/api/admin/backup', requireAdmin, async (req, res) => {
-  if (!fs.existsSync(DB_PATH)) {
-    return res.status(404).json({ error: 'Database không tìm thấy' });
-  }
   try {
+    const db = parseDbUrl(process.env.DATABASE_URL || '');
     const password = req.query.password as string | undefined;
     const date = new Date().toISOString().slice(0, 10);
-    let data = fs.readFileSync(DB_PATH);
+
+    const args = [
+      `--host=${db.host}`,
+      `--port=${db.port}`,
+      `--user=${db.user}`,
+      `--password=${db.password}`,
+      '--single-transaction',
+      '--routines',
+      '--triggers',
+      db.database,
+    ];
+    const { stdout } = await execFileAsync('mysqldump', args);
+    let data: Buffer = Buffer.from(stdout, 'utf-8');
     let filename: string;
+
     if (password) {
       data = Buffer.from(encryptBuffer(data, password));
-      filename = `backup-ke-toan-${date}.db.enc`;
+      filename = `backup-ke-toan-${date}.sql.enc`;
     } else {
-      filename = `backup-ke-toan-${date}.db`;
+      filename = `backup-ke-toan-${date}.sql`;
     }
+
     await writeLog({
       userId:   (req as any).user?.id,
       username: (req as any).user?.username,
@@ -117,19 +138,19 @@ app.get('/api/admin/backup', requireAdmin, async (req, res) => {
   }
 });
 
-// ── Restore — upload file db ──
+// ── Restore — upload file .sql ──
 const uploadTmp = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, path.join(__dirname, '../prisma')),
-    filename:    (_req, _file, cb) => cb(null, `restore-tmp-${Date.now()}.db`),
+    filename:    (_req, _file, cb) => cb(null, `restore-tmp-${Date.now()}.sql`),
   }),
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (file.originalname.endsWith('.db') || file.mimetype === 'application/octet-stream') {
-      cb(null, true);
-    } else {
-      cb(new Error('Chỉ chấp nhận file .db'));
-    }
+    const ok = file.originalname.endsWith('.sql')
+      || file.originalname.endsWith('.sql.enc')
+      || file.mimetype === 'application/octet-stream'
+      || file.mimetype === 'text/plain';
+    ok ? cb(null, true) : cb(new Error('Chỉ chấp nhận file .sql hoặc .sql.enc'));
   },
 });
 
@@ -140,11 +161,12 @@ app.post('/api/admin/restore', requireAdmin, uploadTmp.single('db'), async (req,
   try {
     let data = fs.readFileSync(tmpPath);
 
+    // Giải mã nếu file được mã hoá
     if (isEncrypted(data)) {
       const password = req.body.restorePassword as string;
       if (!password) {
         fs.unlinkSync(tmpPath);
-        return res.status(400).json({ error: 'File mã hoá (.enc) cần nhập mật khẩu để khôi phục' });
+        return res.status(400).json({ error: 'File mã hoá cần nhập mật khẩu để khôi phục' });
       }
       try {
         data = Buffer.from(decryptBuffer(data, password));
@@ -154,16 +176,33 @@ app.post('/api/admin/restore', requireAdmin, uploadTmp.single('db'), async (req,
       }
     }
 
-    if (!data.subarray(0, 16).toString('ascii').startsWith('SQLite format 3')) {
+    // Validate: file phải là MariaDB/MySQL dump
+    const header = data.subarray(0, 200).toString('utf-8');
+    if (!header.includes('MariaDB dump') && !header.includes('MySQL dump')) {
       fs.unlinkSync(tmpPath);
-      return res.status(400).json({ error: 'File không phải SQLite database hợp lệ' });
+      return res.status(400).json({ error: 'File không phải MariaDB/MySQL dump hợp lệ' });
     }
 
-    if (fs.existsSync(DB_PATH)) {
-      fs.copyFileSync(DB_PATH, DB_PATH + '.pre-restore-' + Date.now());
-    }
+    // Chạy mysql để restore — pipe data vào stdin
+    const db = parseDbUrl(process.env.DATABASE_URL || '');
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn('mysql', [
+        `--host=${db.host}`,
+        `--port=${db.port}`,
+        `--user=${db.user}`,
+        `--password=${db.password}`,
+        db.database,
+      ]);
+      let stderr = '';
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      child.on('close', (code) => {
+        code === 0 ? resolve() : reject(new Error(`mysql exit ${code}: ${stderr}`));
+      });
+      child.on('error', reject);
+      child.stdin.write(data);
+      child.stdin.end();
+    });
 
-    fs.writeFileSync(DB_PATH, data);
     fs.unlinkSync(tmpPath);
 
     await writeLog({

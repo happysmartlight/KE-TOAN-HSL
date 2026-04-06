@@ -27,8 +27,8 @@ npm install --include=dev
 log "Prisma generate..."
 npx prisma generate
 
-log "Prisma migrate (production)..."
-npx prisma migrate deploy
+log "Prisma push schema..."
+npx prisma db push --accept-data-loss
 
 log "Build backend..."
 npm run build
