@@ -105,7 +105,6 @@ jobs:
       - name: Run system tests
         run: npm run test:system -- --ci --runInBand
         env:
-          DATABASE_URL: "file:./prisma/test.db"
           JWT_SECRET: test-secret-for-ci
           NODE_ENV: test
 
