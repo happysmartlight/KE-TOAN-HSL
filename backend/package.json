@@ -1,6 +1,6 @@
 {
   "name": "ke-toan-noi-bo-backend",
-  "version": "1.0.0",
+  "version": "0.3.5",
   "description": "Internal Accounting System - Backend",
   "main": "dist/index.js",
   "scripts": {
