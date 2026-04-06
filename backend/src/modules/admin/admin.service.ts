@@ -463,7 +463,7 @@ export const adminService = {
     };
     _appendUpdateLog(_updateState.logs[0]);
 
-    const child = spawn('bash', ['-c', `cd "${PROJECT_ROOT}" && git pull && bash deploy.sh`], {
+    const child = spawn('bash', ['-c', `cd "${PROJECT_ROOT}" && git fetch origin && git checkout -- backend/package-lock.json frontend/package-lock.json 2>/dev/null || true && git pull && bash deploy.sh`], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
