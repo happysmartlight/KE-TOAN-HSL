@@ -59,13 +59,21 @@ GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 " && log "Database '${DB_NAME}' và user '${DB_USER}' đã sẵn sàng."
 
-# ── 4. Tạo backend/.env nếu chưa có ─────────────────────────
+# ── 4. Tạo / cập nhật backend/.env ──────────────────────────
 if [ ! -f "$ENV_FILE" ]; then
   warn "Chưa có backend/.env — tạo từ .env.example..."
   cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
   log "Đã tạo backend/.env"
+fi
+
+# Luôn đảm bảo DATABASE_URL đúng định dạng MariaDB (ghi đè nếu còn SQLite cũ)
+CURRENT_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" || true)
+if echo "$CURRENT_URL" | grep -q "^DATABASE_URL=\"file:"; then
+  warn "DATABASE_URL còn dùng SQLite — cập nhật sang MariaDB..."
+  sed -i "s|^DATABASE_URL=.*|DATABASE_URL=\"mysql://${DB_USER}:${DB_PASS}@localhost:3306/${DB_NAME}\"|" "$ENV_FILE"
+  log "Đã cập nhật DATABASE_URL"
 else
-  log "backend/.env đã tồn tại, giữ nguyên."
+  log "DATABASE_URL đã đúng định dạng MariaDB."
 fi
 
 # ── 5. Cài PM2 nếu chưa có ───────────────────────────────────
