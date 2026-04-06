@@ -10,16 +10,73 @@ Hệ thống kế toán nội bộ cho doanh nghiệp nhỏ.
 
 ## Mục lục
 
+- [Tính năng](#tính-năng)
 - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
 - [Cài đặt để phát triển (Dev mode)](#cài-đặt-để-phát-triển-dev-mode)
 - [Cài đặt trên Raspberry Pi (Production)](#cài-đặt-trên-raspberry-pi-production)
-- [Cập nhật sau khi có code mới](#cập-nhật-sau-khi-có-code-mới)
+- [Cập nhật hệ thống](#cập-nhật-hệ-thống)
 - [Tài khoản mặc định](#tài-khoản-mặc-định)
 - [Truy cập hệ thống](#truy-cập-hệ-thống)
 - [Cấu hình môi trường](#cấu-hình-môi-trường)
 - [Lệnh quản lý (Production)](#lệnh-quản-lý-production)
 - [Cấu trúc project](#cấu-trúc-project)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Tính năng
+
+### Nghiệp vụ kế toán
+
+| Tính năng | Mô tả |
+|---|---|
+| **Dòng tiền (Cashflow)** | Thu/Chi theo danh mục, lọc theo kỳ (ngày/tháng/năm), ngày giao dịch thực tế |
+| **Hóa đơn bán hàng** | Tạo hóa đơn, hủy, xóa; tự động giảm tồn kho + tăng công nợ |
+| **Nhập hàng (Purchase)** | Tạo đơn nhập; tự động tăng tồn kho + tăng công nợ nhà cung cấp |
+| **Import hóa đơn XML** | Nhập HĐĐT điện tử (`.xml`) — tự ghép khách hàng theo MST, sản phẩm theo tên |
+| **Thanh toán** | Ghi nhận thanh toán → giảm công nợ, cập nhật trạng thái hóa đơn, tạo cashflow |
+| **Khách hàng & Nhà cung cấp** | Quản lý danh sách, công nợ, lịch sử giao dịch |
+| **Sản phẩm & Tồn kho** | Quản lý sản phẩm, tồn kho, lịch sử nhập/xuất |
+| **Báo cáo** | Dòng tiền, Lợi nhuận/Lỗ, doanh thu theo kỳ |
+| **Dashboard** | KPI tổng quan, biểu đồ doanh thu, top khách hàng (click xem chi tiết) |
+
+### Quản trị hệ thống (Admin)
+
+| Tính năng | Mô tả |
+|---|---|
+| **Quản lý người dùng** | Tạo/sửa/xóa tài khoản, phân quyền Admin / Staff |
+| **Hồ sơ cá nhân** | Đổi tên, avatar, mật khẩu; Staff gửi yêu cầu cập nhật → Admin duyệt |
+| **Yêu cầu xóa** | Staff gửi yêu cầu xóa dữ liệu → Admin duyệt hoặc từ chối |
+| **Rank khách hàng / NCC** | Hệ thống rank (Vàng / Bạch Kim / Kim Cương / Thách Đấu) theo doanh số; ngưỡng cấu hình độc lập cho từng nhóm |
+| **Danh mục thu/chi** | Tạo/sửa/xóa danh mục cashflow tùy chỉnh |
+| **Xóa toàn bộ dữ liệu** | Purge theo nhóm (khách hàng, hóa đơn…) hoặc purge all |
+
+### Sao lưu & Phục hồi
+
+| Tính năng | Mô tả |
+|---|---|
+| **Sao lưu thủ công** | Admin download file `.db` trực tiếp từ giao diện |
+| **Phục hồi từ file** | Admin upload file `.db`; tự backup file hiện tại trước khi ghi đè |
+| **Sao lưu tự động** | Lên lịch cron (hàng giờ / hàng ngày / hàng tuần / tuỳ chỉnh); giữ N bản gần nhất; tùy chọn mã hóa AES |
+| **Quản lý bản backup** | Liệt kê, tải xuống, xóa từng file backup |
+
+### Trạng thái hệ thống & Cập nhật
+
+| Tính năng | Mô tả |
+|---|---|
+| **Monitor tài nguyên** | RAM, CPU, dung lượng ổ đĩa, kích thước DB, uptime, thông tin Node.js |
+| **Nhân sự đang online** | Hiển thị danh sách user đang đăng nhập (username, role, IP, thời gian) |
+| **Activity Logs** | Xem log hoạt động hệ thống (info / warning / error / critical) |
+| **Khởi động lại server** | Admin restart service ngay từ giao diện web (không cần SSH) |
+| **Cấu hình tự khởi động** | Thiết lập PM2 startup để server tự chạy sau khi reboot Pi |
+| **Kiểm tra & cài cập nhật** | So sánh commit hiện tại với GitHub remote; xem danh sách commit mới; cài cập nhật 1 click (`git pull` + build + reload PM2) ngay từ trình duyệt |
+
+### Mạng & Truy cập từ xa
+
+| Tính năng | Mô tả |
+|---|---|
+| **Thiết lập mạng** | Xem IP nội bộ, URL đầy đủ, QR code để truy cập nhanh từ điện thoại |
+| **Tailscale VPN** | Wizard cài đặt Tailscale trực tiếp từ giao diện; truy cập hệ thống từ bất kỳ đâu qua internet |
 
 ---
 
@@ -149,7 +206,7 @@ bash install.sh
 Script này tự động làm tất cả:
 - Cài PM2 (process manager, nếu chưa có)
 - Tạo `backend/.env` từ `.env.example`
-- Cài dependencies backend + frontend
+- Cài dependencies backend + frontend (bao gồm devDependencies để build)
 - Chạy Prisma migrations
 - Seed dữ liệu mặc định (nếu database mới)
 - Build backend + frontend
@@ -158,21 +215,40 @@ Script này tự động làm tất cả:
 
 ### Bước 4 — Bật tự khởi động khi reboot
 
-Sau khi script chạy xong, nó sẽ in ra một lệnh dạng:
+**Cách 1 — Qua giao diện web (khuyên dùng):**
+
+Sau khi cài xong, đăng nhập admin → **Hệ thống → Trạng thái hệ thống → tab Trạng thái → panel "Tự khởi động"** → nhấn **Cài đặt tự khởi động**.
+
+Hệ thống sẽ tự chạy lệnh `pm2 startup` và `pm2 save` thay bạn.
+
+**Cách 2 — Thủ công qua terminal:**
+
+Sau khi `install.sh` chạy xong, nó in ra một lệnh dạng:
 ```
 sudo env PATH=... pm2 startup systemd -u pi --hp /home/pi
 ```
 
-**Copy chính xác lệnh đó và chạy.** Sau đó lưu cấu hình:
+Copy chính xác lệnh đó và chạy, sau đó:
 ```bash
 pm2 save
 ```
 
-Từ lần sau, khi Raspberry Pi khởi động lại, hệ thống sẽ tự chạy.
-
 ---
 
-## Cập nhật sau khi có code mới
+## Cập nhật hệ thống
+
+### Cách 1 — Qua giao diện web (khuyên dùng, không cần SSH)
+
+1. Đăng nhập admin → **Hệ thống → Trạng thái hệ thống → tab Cập nhật**
+2. Nhấn **Kiểm tra cập nhật** — hệ thống so sánh commit hiện tại với GitHub
+3. Nếu có bản mới: xem danh sách commit sắp được cài, nhấn **Cài cập nhật**
+4. Hệ thống tự chạy `git pull` → cài dependencies → migrate DB → build → reload PM2
+5. Theo dõi log trực tiếp trong giao diện; khi xong nhấn **Khởi động lại server** nếu cần
+
+> **Lưu ý:** Tính năng này chỉ hoạt động khi server chạy trên Linux (Raspberry Pi).  
+> Yêu cầu server có kết nối internet để `git pull` về GitHub.
+
+### Cách 2 — Qua terminal
 
 ```bash
 git pull
@@ -223,6 +299,12 @@ hostname -I
 ```
 
 ### Truy cập từ xa qua Tailscale (ngoài mạng nội bộ)
+
+**Cách 1 — Qua giao diện web:**
+
+Đăng nhập admin → **Hệ thống → Thiết lập mạng** → làm theo wizard Tailscale.
+
+**Cách 2 — Thủ công:**
 
 1. Cài Tailscale trên Raspberry Pi:
    ```bash
@@ -290,16 +372,48 @@ ke-toan-noi-bo/
 │   │   └── dev.db              # SQLite database (tạo tự động, không commit)
 │   ├── src/
 │   │   ├── index.ts            # Entry point, route mounting
-│   │   ├── middleware/         # Auth middleware (JWT)
+│   │   ├── middleware/         # Auth middleware (JWT), online-user tracker
 │   │   ├── utils/              # Logger, backup utilities
-│   │   └── modules/            # Các module nghiệp vụ
+│   │   └── modules/
+│   │       ├── admin/          # Health, update, network, Tailscale, rank config
+│   │       ├── backup/         # Auto backup (cron), manual backup/restore
+│   │       ├── cashflow/       # Thu/Chi
+│   │       ├── cashflow-category/
+│   │       ├── customer/
+│   │       ├── supplier/
+│   │       ├── invoice/        # Hóa đơn + XML import
+│   │       ├── purchase/       # Nhập hàng
+│   │       ├── product/
+│   │       ├── payment/
+│   │       ├── report/
+│   │       ├── log/            # Activity logs
+│   │       └── user/           # Users + profile requests
 │   ├── .env.example            # Mẫu cấu hình (commit)
 │   ├── .env                    # Cấu hình thật (KHÔNG commit)
 │   └── package.json
 ├── frontend/
 │   ├── src/
 │   │   ├── App.tsx             # Router, sidebar
-│   │   ├── pages/              # Các trang
+│   │   ├── pages/
+│   │   │   ├── Dashboard.tsx
+│   │   │   ├── Invoices.tsx    # Bán hàng + XML import HĐĐT
+│   │   │   ├── Purchases.tsx   # Nhập hàng
+│   │   │   ├── Cashflow.tsx
+│   │   │   ├── CashflowCategories.tsx
+│   │   │   ├── Customers.tsx
+│   │   │   ├── Suppliers.tsx
+│   │   │   ├── Products.tsx
+│   │   │   ├── Reports.tsx
+│   │   │   ├── Users.tsx
+│   │   │   ├── RankConfig.tsx  # Cấu hình ngưỡng rank
+│   │   │   ├── Requests.tsx    # Yêu cầu xóa + cập nhật hồ sơ
+│   │   │   ├── SystemAdmin.tsx # Purge data, backup/restore DB
+│   │   │   ├── AutoBackup.tsx  # Sao lưu tự động (cron)
+│   │   │   ├── SystemHealth.tsx# Monitor server + logs + cập nhật
+│   │   │   ├── NetworkSetup.tsx# Thiết lập mạng, QR, Tailscale
+│   │   │   ├── Logs.tsx        # Activity logs viewer
+│   │   │   ├── MyProfile.tsx
+│   │   │   └── Login.tsx
 │   │   ├── components/         # Components dùng chung
 │   │   └── api.ts              # Axios client
 │   ├── .env.local              # Cấu hình dev LAN (KHÔNG commit, tự tạo nếu cần)
@@ -339,6 +453,14 @@ sudo kill -9 <PID>
 pm2 start ecosystem.config.js
 ```
 
+**Tính năng "Cập nhật" báo lỗi "không phải Linux"**  
+Tính năng cập nhật qua web chỉ hỗ trợ Linux (Raspberry Pi). Trên Windows, dùng `git pull` + `deploy.sh` thủ công.
+
+**Tính năng "Cập nhật" báo lỗi git / không thể pull**  
+- Kiểm tra server có kết nối internet không: `curl -I https://github.com`
+- Đảm bảo không có file bị chỉnh sửa local gây conflict: `git status`
+- Nếu có conflict: `git stash` rồi thử lại
+
 **Reset database (chỉ dùng trong dev, không dùng production)**
 ```bash
 cd backend
@@ -350,4 +472,12 @@ npx ts-node --transpile-only prisma/seed.ts
 **Xem log lỗi chi tiết (production)**
 ```bash
 pm2 logs ke-toan-backend --lines 100
+```
+
+**Build lỗi "tsc not found" / "vite not found" (production)**  
+`deploy.sh` dùng `npm install --include=dev` để giữ lại devDependencies khi build.  
+Nếu lỗi vẫn xảy ra:
+```bash
+cd backend && npm install --include=dev
+cd ../frontend && npm install
 ```
