@@ -1,4 +1,5 @@
 import prisma from '../../utils/prisma';
+import { writeLog } from '../../utils/logger';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -557,8 +558,23 @@ export const invoiceService = {
         success.push(invoice.id);
       } catch (err: any) {
         failed.push({ index: i, eInvoiceCode: inv.eInvoiceCode, error: err.message });
+        writeLog({
+          action:  'error',
+          module:  'invoice',
+          message: `Import XML thất bại — HĐĐT: ${inv.eInvoiceCode || `#${i + 1}`} — ${err.message}`,
+          level:   'error',
+          userId:  createdByUserId,
+        });
       }
     }
+
+    writeLog({
+      action:  'create',
+      module:  'invoice',
+      message: `Import XML batch: ${success.length} thành công${failed.length > 0 ? `, ${failed.length} thất bại (${failed.map((f) => f.eInvoiceCode || `#${f.index + 1}`).join(', ')})` : ''}`,
+      level:   failed.length > 0 ? 'warning' : 'info',
+      userId:  createdByUserId,
+    });
 
     return { success, failed };
   },
