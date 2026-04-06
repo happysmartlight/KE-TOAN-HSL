@@ -2,7 +2,7 @@ import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscKey } from '../hooks/useKeyboard';
 import {
-  BarChart, Bar, LineChart, Line,
+  LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import api from '../api';
@@ -91,17 +91,7 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
     }));
   }, [data]);
 
-  // ── top products chart ───────────────────────────────────────────────────
-  const topChartData = useMemo(() => {
-    if (!data) return [];
-    return data.topProducts.slice(0, 7).map((p) => ({
-      name: p.name.length > 16 ? p.name.slice(0, 14) + '…' : p.name,
-      'Doanh thu': p.totalRevenue,
-      'Đã bán': p.totalSold,
-    }));
-  }, [data]);
-
-  const maxRev = topChartData.reduce((m, r) => Math.max(m, r['Doanh thu']), 0);
+  const maxRev = data ? data.topProducts.reduce((m, p) => Math.max(m, p.totalRevenue), 0) : 0;
 
   // ── period selector ──────────────────────────────────────────────────────
   const periods = [
@@ -195,29 +185,51 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
           )}
         </div>
 
-        {/* Top products bar chart */}
+        {/* Top products leaderboard */}
         <div className="form-panel" style={{ padding: '16px 18px' }}>
           <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 14, letterSpacing: 1, textTransform: 'uppercase' }}>
             🏆 Top doanh thu (mọi thời gian)
           </div>
-          {topChartData.length === 0 ? (
+          {data.topProducts.length === 0 ? (
             <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', fontSize: 12 }}>
               Chưa có dữ liệu bán hàng
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={topChartData} layout="vertical" margin={{ top: 0, right: 8, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                <XAxis type="number" tick={{ fill: 'var(--text-dim)', fontSize: 9 }} tickFormatter={fmtK} />
-                <YAxis type="category" dataKey="name" tick={{ fill: 'var(--text-bright)', fontSize: 9 }} width={90} />
-                <Tooltip
-                  contentStyle={{ background: '#0d0d1a', border: '1px solid rgba(0,245,255,0.2)', fontSize: 11 }}
-                  formatter={(v) => fmt(Number(v))}
-                />
-                <Bar dataKey="Doanh thu" fill="var(--cyan)" radius={[0, 3, 3, 0]}
-                  background={{ fill: 'rgba(255,255,255,0.03)', radius: 3 }} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {data.topProducts.slice(0, 7).map((p, i) => {
+                const pct  = maxRev > 0 ? Math.round((p.totalRevenue / maxRev) * 100) : 0;
+                const rank = getProductRank(p.totalRevenue);
+                const MEDAL = ['🥇', '🥈', '🥉'];
+                const barColor = i === 0 ? '#ffd700' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : (rank?.color ?? 'var(--cyan)');
+                return (
+                  <div key={p.id}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      {/* Huy chương / số thứ tự */}
+                      <span style={{ width: 20, fontSize: i < 3 ? 14 : 10, textAlign: 'center', flexShrink: 0, color: 'var(--text-dim)', fontWeight: 700 }}>
+                        {i < 3 ? MEDAL[i] : `${i + 1}.`}
+                      </span>
+                      {/* Tên đầy đủ — wrap nếu dài */}
+                      <span style={{ flex: 1, fontSize: 12, color: rank?.color ?? 'var(--text-bright)', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                        {p.name}
+                      </span>
+                      {/* Doanh thu + số lượng */}
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: barColor }}>{fmtK(p.totalRevenue)}</div>
+                        <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{p.totalSold.toLocaleString('vi-VN')} {p.unit}</div>
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ width: 20, flexShrink: 0 }} />
+                      <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: barColor, borderRadius: 2, transition: 'width 0.6s', boxShadow: `0 0 6px ${barColor}66` }} />
+                      </div>
+                      <span style={{ fontSize: 9, color: 'var(--text-dim)', width: 28, textAlign: 'right', flexShrink: 0 }}>{pct}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
