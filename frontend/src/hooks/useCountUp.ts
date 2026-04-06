@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export function useCountUp(end: number, duration: number = 1000) {
   const [current, setCurrent] = useState<number>(0);
-  const frameRef = useRef<number | undefined>();
+  const frameRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const startTime = Date.now();
