@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.5] — 2026-04-06
+
+### Tính năng mới
+
+#### Hiển thị version hệ thống
+- **Sidebar logo**: thêm version (v1.0.0) bên cạnh "HAPPY" — font-size nhỏ, màu cyan mờ
+- **SystemHealth page**: hiển thị version trong banner info cùng dòng với Node/OS/CPU
+- **Backend API**: mới `GET /api/admin/version` (lấy version từ backend/package.json)
+
+---
+
 ## [0.3.4] — 2026-04-06
 
 ### Cải tiến
