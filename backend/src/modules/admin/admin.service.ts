@@ -614,4 +614,14 @@ export const adminService = {
       await tx.product.deleteMany();
     });
   },
+
+  getVersion() {
+    try {
+      const pkgPath = path.join(__dirname, '../../../package.json');
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      return { version: pkg.version || '1.0.0' };
+    } catch {
+      return { version: '1.0.0' };
+    }
+  },
 };

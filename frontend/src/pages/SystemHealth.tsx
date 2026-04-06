@@ -110,6 +110,7 @@ export default function SystemHealth() {
   const [startupResult, setStartupResult] = useState<{ ok: boolean; message: string; command?: string } | null>(null);
 
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([]);
+  const [version, setVersion] = useState<string>('1.0.0');
 
   const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
 
@@ -217,12 +218,14 @@ export default function SystemHealth() {
 
   const load = async () => {
     try {
-      const [healthRes, onlineRes] = await Promise.all([
+      const [healthRes, onlineRes, verRes] = await Promise.all([
         api.get('/admin/health'),
         api.get('/admin/online-users'),
+        api.get('/admin/version'),
       ]);
       setInfo(healthRes.data);
       setOnlineUsers(onlineRes.data);
+      if (verRes.data?.version) setVersion(verRes.data.version);
       setLastRefresh(new Date());
       setError('');
     } catch (err: any) {
@@ -301,6 +304,7 @@ export default function SystemHealth() {
             <span><span className="c-dim">Host: </span><span className="c-bright">{info.hostname}</span></span>
             <span><span className="c-dim">OS: </span><span className="c-bright">{info.platform}/{info.arch}</span></span>
             <span><span className="c-dim">Node: </span><span className="c-bright">{info.nodeVersion}</span></span>
+            <span><span className="c-dim">Version: </span><span className="c-bright">v{version}</span></span>
             <span><span className="c-dim">CPU: </span><span className="c-bright">{info.cpu.cores} cores</span></span>
           </div>
         )}

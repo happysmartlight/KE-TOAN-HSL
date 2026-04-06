@@ -147,4 +147,11 @@ export const adminController = {
       res.status(500).json({ error: err.message });
     }
   },
-};
+
+  getVersion(_req: Request, res: Response) {
+    try {
+      res.json(adminService.getVersion());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },

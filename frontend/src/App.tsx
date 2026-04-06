@@ -70,10 +70,19 @@ function AppLayout() {
     }).catch(() => {});
   }, [user?.id]);
 
+  // Load version after login
+  useEffect(() => {
+    if (!user) return;
+    api.get('/admin/version').then((r) => {
+      if (r.data?.version) setVersion(r.data.version);
+    }).catch(() => {});
+  }, [user?.id]);
+
   const [pendingCount, setPendingCount] = useState(0);
   const [purCount, setPurCount] = useState(0);
   const requestsPending = pendingCount + purCount;
   const [myDeleteCount, setMyDeleteCount] = useState(0);
+  const [version, setVersion] = useState<string>('1.0.0');
 
   // Close sidebar when route changes (mobile)
   useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
@@ -127,7 +136,10 @@ function AppLayout() {
         <div className="sidebar-logo">
           <div className="logo-text">
             <span className="logo-prompt">{'>'}_</span>
-            <span className="logo-line1">HAPPY</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 1 }}>
+              <span className="logo-line1">HAPPY</span>
+              <span style={{ fontSize: 9, color: 'rgba(0,245,255,0.5)', fontWeight: 400 }}>v{version}</span>
+            </div>
             <span className="logo-line2">SMART<span className="logo-accent"> LIGHT</span></span>
           </div>
         </div>

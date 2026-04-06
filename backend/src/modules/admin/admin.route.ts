@@ -21,3 +21,4 @@ adminRouter.post('/update/check',         adminController.checkForUpdates);
 adminRouter.post('/update/start',         adminController.startUpdate);
 adminRouter.get('/rank-config',     adminController.getRankConfig);
 adminRouter.put('/rank-config',     adminController.saveRankConfig);
+adminRouter.get('/version',         adminController.getVersion);
