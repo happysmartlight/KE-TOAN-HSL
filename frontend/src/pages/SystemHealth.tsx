@@ -599,7 +599,7 @@ export default function SystemHealth() {
                   )}
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
-                      className="btn ghost btn-sm"
+                      className="btn cyan btn-sm"
                       onClick={handleCheck}
                       disabled={updBusy || upd.phase === 'checking' || upd.phase === 'updating'}
                     >
