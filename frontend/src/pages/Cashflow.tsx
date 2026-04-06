@@ -1,4 +1,5 @@
 import EmptyState from '../components/EmptyState';
+import MoneyInput from '../components/MoneyInput';
 import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscKey } from '../hooks/useKeyboard';
@@ -187,7 +188,7 @@ export default function Cashflow() {
                   ))}
                 </select>
               </div>
-              <div><label className="lbl">Số tiền *</label><input className="inp" type="number" required value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
+              <div><label className="lbl">Số tiền *</label><MoneyInput value={form.amount} onChange={(v) => setForm({ ...form, amount: String(v) })} required /></div>
               <div><label className="lbl">Mô tả</label><input className="inp" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
             </div>
             <div className="form-actions">

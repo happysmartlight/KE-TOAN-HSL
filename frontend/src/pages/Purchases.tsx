@@ -1,4 +1,5 @@
 import EmptyState from '../components/EmptyState';
+import MoneyInput from '../components/MoneyInput';
 import { toast } from '../components/Toast';
 import { useEffect, useMemo, useState } from 'react';
 import { useEscKey } from '../hooks/useKeyboard';
@@ -130,7 +131,7 @@ export default function Purchases() {
                         />
                       </td>
                       <td><input className="inp" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(i, 'quantity', e.target.value)} style={{ width: 70 }} /></td>
-                      <td><input className="inp" type="number" value={item.costPrice} onChange={(e) => updateItem(i, 'costPrice', e.target.value)} style={{ width: 120 }} /></td>
+                      <td><MoneyInput value={item.costPrice} onChange={(v) => updateItem(i, 'costPrice', v)} style={{ width: 120 }} /></td>
                       <td className="c-cyan fw7">{fmt(Number(item.quantity) * Number(item.costPrice))}</td>
                       <td>{items.length > 1 && <button type="button" className="btn red btn-sm" onClick={() => removeItem(i)}>×</button>}</td>
                     </tr>

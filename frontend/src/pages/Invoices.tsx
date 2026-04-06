@@ -1,4 +1,6 @@
 import EmptyState from '../components/EmptyState';
+import MoneyInput from '../components/MoneyInput';
+import { phoneError } from '../utils/validate';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEscKey } from '../hooks/useKeyboard';
 import api from '../api';
@@ -503,7 +505,10 @@ export default function Invoices() {
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--yellow)', marginBottom: 10 }}>+ Thêm khách hàng mới</div>
                 <div className="fg2" style={{ marginBottom: 8 }}>
                   <div><label className="lbl">Tên KH *</label><input className="inp" value={newCustomer.name} placeholder="Nguyễn Văn A" onChange={(e) => setNewCustomer((f) => ({ ...f, name: e.target.value }))} /></div>
-                  <div><label className="lbl">Số điện thoại</label><input className="inp" value={newCustomer.phone} placeholder="0901..." onChange={(e) => setNewCustomer((f) => ({ ...f, phone: e.target.value }))} /></div>
+                  <div><label className="lbl">Số điện thoại</label>
+                    <input className="inp" value={newCustomer.phone} placeholder="0901..." onChange={(e) => setNewCustomer((f) => ({ ...f, phone: e.target.value }))} />
+                    {phoneError(newCustomer.phone) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{phoneError(newCustomer.phone)}</span>}
+                  </div>
                 </div>
                 <div className="fg2" style={{ marginBottom: 8 }}>
                   <div>
@@ -540,7 +545,7 @@ export default function Invoices() {
                         />
                       </td>
                       <td><input className="inp" type="number" min={1} value={item.quantity} onChange={(e) => updateItem(i, 'quantity', e.target.value)} style={{ width: 70 }} /></td>
-                      <td><input className="inp" type="number" value={item.price} onChange={(e) => updateItem(i, 'price', e.target.value)} style={{ width: 120 }} /></td>
+                      <td><MoneyInput value={item.price} onChange={(v) => updateItem(i, 'price', v)} style={{ width: 120 }} /></td>
                       <td>
                         <select className="inp" value={item.taxRate} onChange={(e) => updateItem(i, 'taxRate', e.target.value)} style={{ width: 80 }}>
                           {TAX_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -672,7 +677,7 @@ export default function Invoices() {
               <span className="c-red fw7">{fmt(payModal.totalAmount - payModal.paidAmount)}</span>
             </div>
             <label className="lbl">Số tiền thu</label>
-            <input className="inp" type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ marginBottom: 14 }} />
+            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
               <button className="btn ghost" onClick={() => setPayModal(null)}>[ Hủy ]</button>
@@ -749,11 +754,11 @@ export default function Invoices() {
                       <td style={{ fontSize: 11 }} className="c-dim">{item.unit}</td>
                       <td style={{ fontSize: 12 }}>{item.quantity}</td>
                       <td>
-                        <input
-                          className="inp" type="number" value={item.unitPrice}
-                          onChange={(e) => {
+                        <MoneyInput
+                          value={item.unitPrice}
+                          onChange={(v) => {
                             const updated = [...xmlModal.xmlItems];
-                            updated[i] = { ...updated[i], unitPrice: Number(e.target.value) };
+                            updated[i] = { ...updated[i], unitPrice: v };
                             setXmlModal((m) => m && ({ ...m, xmlItems: updated }));
                           }}
                           style={{ width: 100 }}
@@ -788,8 +793,8 @@ export default function Invoices() {
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <input className="inp" type="number" value={xmlModal.paidAmount}
-                  onChange={(e) => setXmlModal((m) => m && ({ ...m, paidAmount: e.target.value }))}
+                <MoneyInput value={xmlModal.paidAmount}
+                  onChange={(v) => setXmlModal((m) => m && ({ ...m, paidAmount: String(v) }))}
                   placeholder="0" style={{ maxWidth: 200 }}
                 />
                 <span style={{ fontSize: 11 }} className="c-dim">
@@ -970,8 +975,8 @@ export default function Invoices() {
                                   onClick={() => setBatchPreviews((prev) => prev && prev.map((x, j) => j === i ? { ...x, paidAmount: String(Math.round(x.grandTotal * pct / 100)) } : x))}
                                 >{pct === 0 ? '0' : `${pct}%`}</button>
                               ))}
-                              <input type="number" className="inp" value={p.paidAmount} style={{ width: 80, padding: '2px 6px', fontSize: 11 }}
-                                onChange={(e) => setBatchPreviews((prev) => prev && prev.map((x, j) => j === i ? { ...x, paidAmount: e.target.value } : x))}
+                              <MoneyInput value={p.paidAmount} style={{ width: 80, padding: '2px 6px', fontSize: 11 }}
+                                onChange={(v) => setBatchPreviews((prev) => prev && prev.map((x, j) => j === i ? { ...x, paidAmount: String(v) } : x))}
                               />
                             </div>
                           </td>

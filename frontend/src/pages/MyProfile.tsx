@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../api';
 import { toast } from '../components/Toast';
+import { phoneError, emailError } from '../utils/validate';
 
 interface ProfileData {
   id: number;
@@ -281,6 +282,7 @@ export default function MyProfile({ initialTab = 'profile' }: Props) {
                 onChange={(e) => setPurForm({ ...purForm, email: e.target.value })}
                 placeholder={profile.email || 'email@example.com'}
               />
+              {emailError(purForm.email) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{emailError(purForm.email)}</span>}
             </div>
             <div>
               <label className="lbl">Điện thoại</label>
@@ -290,6 +292,7 @@ export default function MyProfile({ initialTab = 'profile' }: Props) {
                 onChange={(e) => setPurForm({ ...purForm, phone: e.target.value })}
                 placeholder={profile.phone || '0901234567'}
               />
+              {phoneError(purForm.phone) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{phoneError(purForm.phone)}</span>}
             </div>
             <div>
               <label className="lbl">Lý do / Ghi chú</label>

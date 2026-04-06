@@ -10,6 +10,8 @@ import type { FilterState } from '../components/FilterBar';
 import HoloCard, { getSupplierRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
 import EmptyState from '../components/EmptyState';
+import MoneyInput from '../components/MoneyInput';
+import { phoneError, emailError } from '../utils/validate';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
@@ -181,8 +183,14 @@ export default function Suppliers() {
 
             {/* Row 3: contact */}
             <div className="fg2" style={{ marginBottom: 10 }}>
-              <div><label className="lbl">Điện thoại</label><input className="inp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
-              <div><label className="lbl">Email</label><input className="inp" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div><label className="lbl">Điện thoại</label>
+                <input className="inp" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                {phoneError(form.phone) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{phoneError(form.phone)}</span>}
+              </div>
+              <div><label className="lbl">Email</label>
+                <input className="inp" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                {emailError(form.email) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{emailError(form.email)}</span>}
+              </div>
               <div><label className="lbl">Địa chỉ</label><input className="inp" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
             </div>
 
@@ -321,7 +329,7 @@ export default function Suppliers() {
               <span className="c-red fw7">{fmt(payModal.debt)}</span>
             </div>
             <label className="lbl">Số tiền trả</label>
-            <input className="inp" type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} style={{ marginBottom: 14 }} />
+            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
               <button className="btn ghost" onClick={() => setPayModal(null)}>[ Hủy ]</button>

@@ -14,6 +14,7 @@ import type { FilterState } from '../components/FilterBar';
 import HoloCard, { getProductRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
 import EmptyState from '../components/EmptyState';
+import MoneyInput from '../components/MoneyInput';
 
 const fmt   = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 const fmtK  = (n: number) => n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : n >= 1_000 ? (n / 1_000).toFixed(0) + 'K' : String(n);
@@ -479,8 +480,8 @@ export default function Products() {
                   <div><label className="lbl">Tên sản phẩm *</label><input className="inp" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
                   <div><label className="lbl">SKU</label><input className="inp" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} /></div>
                   <div><label className="lbl">Đơn vị</label><input className="inp" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} /></div>
-                  <div><label className="lbl">Giá vốn</label><input className="inp" type="number" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} /></div>
-                  <div><label className="lbl">Giá bán</label><input className="inp" type="number" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} /></div>
+                  <div><label className="lbl">Giá vốn</label><MoneyInput value={form.costPrice} onChange={(v) => setForm({ ...form, costPrice: String(v) })} /></div>
+                  <div><label className="lbl">Giá bán</label><MoneyInput value={form.sellingPrice} onChange={(v) => setForm({ ...form, sellingPrice: String(v) })} /></div>
                   <div><label className="lbl">Tồn kho</label><input className="inp" type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} /></div>
                   <div>
                     <label className="lbl">Thuế suất VAT</label>

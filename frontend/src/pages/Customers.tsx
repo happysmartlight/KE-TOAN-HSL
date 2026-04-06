@@ -10,6 +10,7 @@ import type { FilterState } from '../components/FilterBar';
 import HoloCard, { getCustomerRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
 import EmptyState from '../components/EmptyState';
+import { phoneError, emailError } from '../utils/validate';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
@@ -158,6 +159,7 @@ export default function Customers() {
                 <input className="inp" value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="0901..." />
+                {phoneError(form.phone) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{phoneError(form.phone)}</span>}
               </div>
             </div>
 
@@ -210,6 +212,7 @@ export default function Customers() {
                 <input className="inp" value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="email@..." />
+                {emailError(form.email) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{emailError(form.email)}</span>}
               </div>
               <div>
                 <label className="lbl">Địa chỉ</label>

@@ -9,6 +9,7 @@ import { useEscKey } from '../hooks/useKeyboard';
 import DatePicker from '../components/DatePicker';
 import HoloCard, { getUserRank } from '../components/HoloCard';
 import type { HoloData } from '../components/HoloCard';
+import { phoneError, emailError } from '../utils/validate';
 
 const emptyForm = {
   username: '', password: '', name: '', role: 'staff',
@@ -212,11 +213,13 @@ export default function Users() {
                 <label className="lbl">Email</label>
                 <input className="inp" type="email" value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@example.com" />
+                {emailError(form.email) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{emailError(form.email)}</span>}
               </div>
               <div>
                 <label className="lbl">Điện thoại</label>
                 <input className="inp" value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="0901234567" />
+                {phoneError(form.phone) && <span style={{ fontSize: 10, color: 'var(--red)' }}>{phoneError(form.phone)}</span>}
               </div>
               <div>
                 <label className="lbl">Ngày vào làm</label>
