@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.4] — 2026-04-06
+
+### Cải tiến
+
+#### Dashboard — Tối ưu hóa UI/UX
+- **Top khách hàng**: Thay đổi layout từ `textOverflow: 'ellipsis'` → `wordBreak: 'break-word'` để tên dài có thể xuống dòng thay vì bị nén
+- **Pie charts (Nguồn thu / Chi phí)**:
+  - Xóa animation rotate → Legend dễ đọc hơn
+  - Thêm drop-shadow glow trên mỗi phần chart để tạo chiều sâu
+- **Layout Row 3**: Tách "⚡ Thu/Chi theo tháng" thành 2 phần (T1-T6, T7-T12) cùng hàng với "🏅 Top 3 nhân viên" → Grid 3 cột cân bằng với Row 2
+- **Làm mịn hiệu ứng**:
+  - Top khách hàng top 3: glow border + shimmer overlay, bỏ zoom hover
+  - Minor: font-size, spacing adjustments cho tổng thể nhất quán
+
+---
+
 ## [0.3.3] — 2026-04-06
 
 ### Tính năng mới
