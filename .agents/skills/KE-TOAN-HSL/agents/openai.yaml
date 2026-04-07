@@ -1,0 +1,6 @@
+interface:
+  display_name: "KE TOAN HSL"
+  short_description: "Repo-specific patterns and workflows for KE-TOAN-HSL"
+  default_prompt: "Use the KE-TOAN-HSL repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
