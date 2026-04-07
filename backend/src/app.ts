@@ -31,11 +31,21 @@ const execFileAsync = promisify(execFile);
 
 export const app = express();
 
-/** Parse DATABASE_URL dạng mysql://user:pass@host:port/dbname */
+/** Parse DATABASE_URL dạng mysql://user:pass@host:port/dbname
+ *  Hỗ trợ password có ký tự đặc biệt (kể cả '@') bằng greedy match tới '@' cuối cùng
+ *  trước host:port, và tự decodeURIComponent cho user/password.
+ */
 function parseDbUrl(url: string) {
-  const match = url.match(/^mysql:\/\/([^:]+):([^@]*)@([^:]+):(\d+)\/(.+)$/);
+  const match = url.match(/^mysql:\/\/([^:@]+):(.*)@([^:@/]+):(\d+)\/([^?]+)(?:\?.*)?$/);
   if (!match) throw new Error('DATABASE_URL không đúng định dạng');
-  return { user: match[1], password: match[2], host: match[3], port: match[4], database: match[5] };
+  const dec = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
+  return {
+    user:     dec(match[1]),
+    password: dec(match[2]),
+    host:     match[3],
+    port:     match[4],
+    database: match[5],
+  };
 }
 
 // Allow all origins — needed for LAN mobile access
@@ -104,13 +114,15 @@ app.get('/api/admin/backup', requireAdmin, async (req, res) => {
       `--host=${db.host}`,
       `--port=${db.port}`,
       `--user=${db.user}`,
-      `--password=${db.password}`,
       '--single-transaction',
       '--routines',
       '--triggers',
       db.database,
     ];
-    const { stdout } = await execFileAsync('mysqldump', args);
+    const { stdout } = await execFileAsync('mysqldump', args, {
+      env: { ...process.env, MYSQL_PWD: db.password },
+      maxBuffer: 1024 * 1024 * 512, // 512MB
+    });
     let data: Buffer = Buffer.from(stdout, 'utf-8');
     let filename: string;
 
@@ -190,9 +202,10 @@ app.post('/api/admin/restore', requireAdmin, uploadTmp.single('db'), async (req,
         `--host=${db.host}`,
         `--port=${db.port}`,
         `--user=${db.user}`,
-        `--password=${db.password}`,
         db.database,
-      ]);
+      ], {
+        env: { ...process.env, MYSQL_PWD: db.password },
+      });
       let stderr = '';
       child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
       child.on('close', (code) => {

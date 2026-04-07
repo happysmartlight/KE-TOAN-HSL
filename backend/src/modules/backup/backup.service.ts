@@ -29,13 +29,18 @@ const DEFAULT_CONFIG: BackupConfig = {
 
 let cronTask: ScheduledTask | null = null;
 
-/** Parse DATABASE_URL dạng mysql://user:pass@host:port/dbname */
+/** Parse DATABASE_URL dạng mysql://user:pass@host:port/dbname
+ *  Hỗ trợ password có ký tự đặc biệt (kể cả '@') bằng greedy match tới '@' cuối cùng
+ *  trước host:port, và tự decodeURIComponent cho user/password.
+ */
 function parseDbUrl(url: string) {
-  const match = url.match(/^mysql:\/\/([^:]+):([^@]*)@([^:]+):(\d+)\/(.+)$/);
+  // Greedy `.*` cho password để match tới ký tự '@' cuối cùng trước host:port/db
+  const match = url.match(/^mysql:\/\/([^:@]+):(.*)@([^:@/]+):(\d+)\/([^?]+)(?:\?.*)?$/);
   if (!match) throw new Error('DATABASE_URL không đúng định dạng mysql://user:pass@host:port/dbname');
+  const dec = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
   return {
-    user:     match[1],
-    password: match[2],
+    user:     dec(match[1]),
+    password: dec(match[2]),
     host:     match[3],
     port:     match[4],
     database: match[5],
@@ -90,18 +95,20 @@ export const backupService = {
     const filename = `backup-${ts}${ext}`;
     const destPath = path.join(BACKUP_DIR, filename);
 
-    // Chạy mysqldump
+    // Chạy mysqldump — truyền password qua MYSQL_PWD để tránh cảnh báo & xử lý ký tự đặc biệt
     const args = [
       `--host=${db.host}`,
       `--port=${db.port}`,
       `--user=${db.user}`,
-      `--password=${db.password}`,
       '--single-transaction',
       '--routines',
       '--triggers',
       db.database,
     ];
-    const { stdout } = await execFileAsync('mysqldump', args);
+    const { stdout } = await execFileAsync('mysqldump', args, {
+      env: { ...process.env, MYSQL_PWD: db.password },
+      maxBuffer: 1024 * 1024 * 512, // 512MB
+    });
     let data: Buffer = Buffer.from(stdout, 'utf-8');
 
     if (config.encrypt && config.password) {
