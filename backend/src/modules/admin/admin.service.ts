@@ -430,15 +430,18 @@ export const adminService = {
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`),
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short origin/master`),
         _run(`git -C "${PROJECT_ROOT}" rev-list HEAD..origin/master --count`),
-        _run(`git -C "${PROJECT_ROOT}" log HEAD..origin/master --oneline --no-decorate`).catch(() => ''),
-        _run(`git -C "${PROJECT_ROOT}" log HEAD -1 --pretty=format:%s`).catch(() => ''),
+        // -z: record separator = NUL; format: short hash + space + full body (%B giữ nguyên xuống dòng)
+        _run(`git -C "${PROJECT_ROOT}" log HEAD..origin/master -z --pretty=format:%h %B`).catch(() => ''),
+        _run(`git -C "${PROJECT_ROOT}" log HEAD -1 --pretty=format:%B`).catch(() => ''),
       ]);
       const commitsBehind = parseInt(countStr, 10) || 0;
-      const newCommits = newLog ? newLog.split('\n').filter(Boolean) : [];
+      const newCommits = newLog
+        ? newLog.split('\0').map((s) => s.trim()).filter(Boolean)
+        : [];
       _updateState = {
         phase: commitsBehind > 0 ? 'update_available' : 'up_to_date',
         currentCommit: current,
-        currentMessage: currentMsg || undefined,
+        currentMessage: currentMsg ? currentMsg.trim() : undefined,
         remoteCommit: remote,
         commitsBehind,
         newCommits,

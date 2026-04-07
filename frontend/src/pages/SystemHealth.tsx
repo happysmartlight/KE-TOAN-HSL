@@ -627,7 +627,6 @@ export default function SystemHealth() {
                       <span>
                         <span className="c-dim">Hiện tại: </span>
                         <span style={{ fontFamily: 'monospace', color: 'var(--cyan)' }}>{upd.currentCommit}</span>
-                        {upd.currentMessage && <span className="c-dim"> — {upd.currentMessage}</span>}
                       </span>
                     )}
                     {upd.remoteCommit && (
@@ -644,17 +643,45 @@ export default function SystemHealth() {
                   </div>
                 )}
 
-                {/* New commits list */}
+                {/* Full message of current commit */}
+                {upd.currentMessage && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
+                      📌 Commit hiện tại:
+                    </div>
+                    <pre
+                      style={{
+                        margin: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7,
+                        color: 'var(--text-bright)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(0,245,255,0.08)',
+                        borderRadius: 4, padding: '8px 12px',
+                      }}
+                    >
+                      {upd.currentMessage}
+                    </pre>
+                  </div>
+                )}
+
+                {/* New commits list — hiển thị đầy đủ nội dung mỗi commit */}
                 {upd.newCommits && upd.newCommits.length > 0 && (
                   <div style={{ marginTop: 10 }}>
                     <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>
                       📝 {upd.newCommits.length} thay đổi mới:
                     </div>
-                    <div style={{ fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {upd.newCommits.map((c, i) => (
-                        <div key={i} style={{ color: 'var(--text-bright)' }}>
-                          <span style={{ color: 'var(--cyan)', marginRight: 8 }}>▸</span>{c}
-                        </div>
+                        <pre
+                          key={i}
+                          style={{
+                            margin: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7,
+                            color: 'var(--text-bright)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            background: 'rgba(0,0,0,0.25)',
+                            borderLeft: '2px solid var(--cyan)',
+                            borderRadius: 4, padding: '8px 12px',
+                          }}
+                        >
+                          {c}
+                        </pre>
                       ))}
                     </div>
                   </div>
