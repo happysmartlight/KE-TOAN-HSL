@@ -262,8 +262,11 @@ set "DB_NAME="
 if not exist "%ENV_FILE%" goto :eof
 for /f "tokens=*" %%l in ('findstr /b /c:"DATABASE_URL=" "%ENV_FILE%"') do set "DB_LINE=%%l"
 REM DB_LINE = DATABASE_URL="mysql://user:pass@host:port/dbname"
-REM Lay phan sau / cuoi cung va truoc " hoac ?
-for /f "tokens=2 delims=/" %%a in ("%DB_LINE:*://=%") do set "DB_NAME=%%a"
-set "DB_NAME=%DB_NAME:"=%"
+REM Strip quotes truoc khi parse de tranh loi quoting trong for /f
+set "DB_LINE=%DB_LINE:"=%"
+REM Sau strip: DATABASE_URL=mysql://user:pass@host:port/dbname
+set "AFTER_PROTO=%DB_LINE:*://=%"
+REM AFTER_PROTO = user:pass@host:port/dbname
+for /f "tokens=2 delims=/" %%a in ("%AFTER_PROTO%") do set "DB_NAME=%%a"
 for /f "tokens=1 delims=?" %%a in ("%DB_NAME%") do set "DB_NAME=%%a"
 goto :eof
