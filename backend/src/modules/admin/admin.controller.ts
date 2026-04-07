@@ -119,10 +119,14 @@ export const adminController = {
     }
   },
 
-  startUpdate(_req: Request, res: Response) {
-    const result = adminService.startUpdate();
-    if (!result.ok) return res.status(400).json({ error: result.error });
-    res.json({ ok: true });
+  async startUpdate(_req: Request, res: Response) {
+    try {
+      const result = await adminService.startUpdate();
+      if (!result.ok) return res.status(400).json({ error: result.error });
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   },
 
   getRankConfig(_req: Request, res: Response) {

@@ -35,6 +35,8 @@ export type UpdatePhase =
   | 'success'
   | 'error';
 
+export type CiStatus = 'passing' | 'failing' | 'unknown';
+
 export type UpdateState = {
   phase: UpdatePhase;
   currentCommit?: string;
@@ -42,6 +44,7 @@ export type UpdateState = {
   remoteCommit?: string;
   commitsBehind?: number;
   newCommits?: string[];
+  ciStatus?: CiStatus;
   logs: string[];
   error?: string;
   checkedAt?: number;
@@ -83,6 +86,30 @@ const _run = (cmd: string, cwd?: string) =>
       err ? reject(err) : resolve(stdout.trim())
     )
   );
+
+// CI badge URL trên branch master
+const CI_BADGE_URL =
+  'https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg?branch=master';
+
+/** Fetch CI status từ badge SVG của GitHub Actions */
+async function _fetchCiStatus(): Promise<CiStatus> {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 10_000);
+    const res = await fetch(CI_BADGE_URL, {
+      signal: ctl.signal,
+      headers: { 'Cache-Control': 'no-cache' },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return 'unknown';
+    const text = await res.text();
+    if (/>\s*passing\s*</i.test(text) || /passing/i.test(text)) return 'passing';
+    if (/>\s*failing\s*</i.test(text) || /failing/i.test(text)) return 'failing';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
 
 export type GroupName = 'customers' | 'suppliers' | 'products' | 'invoices' | 'purchases' | 'cashflow' | 'logs';
 
@@ -425,6 +452,32 @@ export const adminService = {
   async checkForUpdates(): Promise<void> {
     _updateState = { phase: 'checking', logs: [] };
     try {
+      // ── BƯỚC 1: Kiểm tra CI/CD TRƯỚC ─────────────────────────────────
+      // Nếu remote đang FAIL thì không tải gì thêm, báo lỗi ngay để tránh
+      // kéo code lỗi về máy local.
+      const ciStatus = await _fetchCiStatus();
+
+      // Luôn lấy commit hiện tại của local để hiển thị, dù CI có fail
+      const currentLocal = await _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`).catch(() => '');
+      const currentMsgLocal = await _run(`git -C "${PROJECT_ROOT}" log HEAD -1 --pretty=format:%B`).catch(() => '');
+
+      if (ciStatus === 'failing') {
+        _updateState = {
+          phase: 'error',
+          ciStatus,
+          currentCommit: currentLocal || undefined,
+          currentMessage: currentMsgLocal ? currentMsgLocal.trim() : undefined,
+          logs: [],
+          error:
+            'CI/CD trên remote đang FAIL — tạm dừng kiểm tra cập nhật. ' +
+            'Vui lòng đợi maintainer sửa rồi thử lại. ' +
+            'Chi tiết: https://github.com/happysmartlight/KE-TOAN-HSL/actions',
+          checkedAt: Date.now(),
+        };
+        return;
+      }
+
+      // ── BƯỚC 2: CI pass hoặc unknown → fetch commit info ─────────────
       await _run(`git -C "${PROJECT_ROOT}" fetch origin master`);
       const [current, remote, countStr, newLog, currentMsg] = await Promise.all([
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`),
@@ -445,21 +498,39 @@ export const adminService = {
         remoteCommit: remote,
         commitsBehind,
         newCommits,
+        ciStatus,
         logs: [],
         checkedAt: Date.now(),
       };
     } catch (err: any) {
-      _updateState = { phase: 'error', logs: [], error: `git fetch thất bại: ${err.message}` };
+      _updateState = { phase: 'error', logs: [], error: `Kiểm tra cập nhật thất bại: ${err.message}` };
     }
   },
 
-  startUpdate(): { ok: boolean; error?: string } {
+  async startUpdate(): Promise<{ ok: boolean; error?: string }> {
     if (os.platform() !== 'linux') {
       return { ok: false, error: 'Chỉ hỗ trợ trên Linux / Raspberry Pi.' };
     }
     const allowed: UpdatePhase[] = ['update_available', 'up_to_date', 'error'];
     if (!allowed.includes(_updateState.phase)) {
       return { ok: true }; // đang chạy rồi, frontend poll tiếp
+    }
+
+    // ── Re-check CI/CD ngay trước khi pull ────────────────────────────
+    // Tránh race condition: checkForUpdates trước đó thấy CI pass, nhưng
+    // đến lúc user bấm "Cập nhật ngay" thì CI vừa chuyển sang fail.
+    const ciStatus = await _fetchCiStatus();
+    if (ciStatus === 'failing') {
+      _updateState = {
+        ..._updateState,
+        phase: 'error',
+        ciStatus,
+        error:
+          'CI/CD trên remote đang FAIL — huỷ cập nhật để tránh kéo code lỗi về. ' +
+          'Chi tiết: https://github.com/happysmartlight/KE-TOAN-HSL/actions',
+        checkedAt: Date.now(),
+      };
+      return { ok: false, error: _updateState.error };
     }
 
     // Xóa log cũ
@@ -469,9 +540,15 @@ export const adminService = {
       currentCommit: _updateState.currentCommit,
       remoteCommit: _updateState.remoteCommit,
       commitsBehind: _updateState.commitsBehind,
+      ciStatus,
       logs: [`[${new Date().toLocaleString('vi-VN')}] Bắt đầu cập nhật hệ thống...`],
     };
     _appendUpdateLog(_updateState.logs[0]);
+    if (ciStatus === 'passing') {
+      _appendUpdateLog('✔ CI/CD PASS — tiến hành kéo code mới...');
+    } else {
+      _appendUpdateLog('⚠ Không xác định được CI/CD status — tiếp tục cẩn thận...');
+    }
 
     const child = spawn('bash', ['-c', `cd "${PROJECT_ROOT}" && git fetch origin && git checkout -- backend/package-lock.json frontend/package-lock.json 2>/dev/null || true && git pull && bash deploy.sh`], {
       stdio: ['ignore', 'pipe', 'pipe'],

@@ -68,6 +68,7 @@ function StatusDot({ ok }: { ok: boolean }) {
 }
 
 type UpdatePhase = 'idle' | 'checking' | 'up_to_date' | 'update_available' | 'updating' | 'success' | 'error';
+type CiStatus = 'passing' | 'failing' | 'unknown';
 type UpdateState = {
   phase: UpdatePhase;
   currentCommit?: string;
@@ -75,6 +76,7 @@ type UpdateState = {
   remoteCommit?: string;
   commitsBehind?: number;
   newCommits?: string[];
+  ciStatus?: CiStatus;
   logs: string[];
   error?: string;
   checkedAt?: number;
@@ -613,7 +615,8 @@ export default function SystemHealth() {
                       <button
                         className="btn yellow btn-sm"
                         onClick={handleUpdate}
-                        disabled={updBusy}
+                        disabled={updBusy || upd.ciStatus === 'failing'}
+                        title={upd.ciStatus === 'failing' ? 'CI/CD đang FAIL trên remote — không thể cập nhật' : undefined}
                       >
                         ⬆ Cập nhật ngay
                       </button>
@@ -621,7 +624,7 @@ export default function SystemHealth() {
                   </div>
                 </div>
 
-                {(upd.currentCommit || upd.remoteCommit) && (
+                {(upd.currentCommit || upd.remoteCommit || upd.ciStatus) && (
                   <div style={{ display: 'flex', gap: '6px 24px', flexWrap: 'wrap', marginTop: 10, fontSize: 11 }}>
                     {upd.currentCommit && (
                       <span>
@@ -634,6 +637,20 @@ export default function SystemHealth() {
                     )}
                     {upd.commitsBehind !== undefined && upd.commitsBehind > 0 && (
                       <span><span className="c-dim">Chậm hơn: </span><span style={{ color: 'var(--yellow)', fontWeight: 700 }}>{upd.commitsBehind} commit</span></span>
+                    )}
+                    {upd.ciStatus && (
+                      <span>
+                        <span className="c-dim">CI/CD: </span>
+                        {upd.ciStatus === 'passing' && (
+                          <span className="tag green" style={{ fontSize: 10 }}>PASSING ✓</span>
+                        )}
+                        {upd.ciStatus === 'failing' && (
+                          <span className="tag red" style={{ fontSize: 10 }}>FAILING ✗</span>
+                        )}
+                        {upd.ciStatus === 'unknown' && (
+                          <span className="tag yellow" style={{ fontSize: 10 }}>UNKNOWN ?</span>
+                        )}
+                      </span>
                     )}
                     {upd.checkedAt && (
                       <span className="c-dim" style={{ marginLeft: 'auto' }}>
