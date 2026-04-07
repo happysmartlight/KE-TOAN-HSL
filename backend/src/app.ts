@@ -105,8 +105,12 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 
 // ── Rate limit ──
+// Bỏ qua khi chạy test (NODE_ENV=test) để supertest không bị 429.
+const RATE_LIMIT_DISABLED = process.env.NODE_ENV === 'test' || process.env.DISABLE_RATE_LIMIT === '1';
+const noopLimiter = (_req: Request, _res: Response, next: NextFunction) => next();
+
 // Auth endpoints (login...) — chống brute-force credential.
-const authLimiter = rateLimit({
+const authLimiter = RATE_LIMIT_DISABLED ? noopLimiter : rateLimit({
   windowMs: 15 * 60 * 1000, // 15 phút
   limit: 10,                // tối đa 10 request / IP / 15 phút
   standardHeaders: 'draft-7',
@@ -114,7 +118,7 @@ const authLimiter = rateLimit({
   message: { error: 'Quá nhiều lần thử. Hãy đợi vài phút rồi thử lại.' },
 });
 // Global limiter — chống abuse / scrape.
-const globalLimiter = rateLimit({
+const globalLimiter = RATE_LIMIT_DISABLED ? noopLimiter : rateLimit({
   windowMs: 60 * 1000, // 1 phút
   limit: 300,
   standardHeaders: 'draft-7',
