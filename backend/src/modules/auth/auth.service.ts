@@ -1,10 +1,26 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import prisma from '../../utils/prisma';
 import { writeLog } from '../../utils/logger';
+import { signToken } from '../../utils/jwt';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'ke-toan-noi-bo-secret-2024';
-const JWT_EXPIRES = '7d';
+// Hạ TTL token từ 7d → 8h cho app tài chính (giảm cửa sổ tấn công nếu token rò rỉ)
+const JWT_EXPIRES = '8h';
+
+// Bcrypt cost factor: 12 (≈250ms trên CPU hiện đại) — đủ chậm để chống brute force offline
+const BCRYPT_ROUNDS = 12;
+
+const PASSWORD_MIN_LENGTH = 12;
+
+function assertPasswordPolicy(pwd: string) {
+  if (typeof pwd !== 'string' || pwd.length < PASSWORD_MIN_LENGTH) {
+    throw new Error(`Mật khẩu phải có ít nhất ${PASSWORD_MIN_LENGTH} ký tự`);
+  }
+  // Yêu cầu tối thiểu 3/4 nhóm ký tự (chữ thường, chữ hoa, số, ký tự đặc biệt)
+  const groups = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((re) => re.test(pwd)).length;
+  if (groups < 3) {
+    throw new Error('Mật khẩu phải gồm ít nhất 3 trong 4 nhóm: chữ thường, chữ hoa, số, ký tự đặc biệt');
+  }
+}
 
 export const authService = {
   async login(username: string, password: string, ip?: string) {
@@ -20,10 +36,9 @@ export const authService = {
       throw new Error('Sai tên đăng nhập hoặc mật khẩu');
     }
 
-    const token = jwt.sign(
+    const token = signToken(
       { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES }
+      JWT_EXPIRES,
     );
 
     await writeLog({ userId: user.id, username: user.username, action: 'login', module: 'auth', message: `Đăng nhập thành công`, level: 'info', ip });
@@ -34,17 +49,15 @@ export const authService = {
     };
   },
 
-  async register(data: { username: string; password: string; name: string; role?: string }) {
-    const exists = await prisma.user.findUnique({ where: { username: data.username } });
-    if (exists) throw new Error('Tên đăng nhập đã tồn tại');
-
-    const hashed = await bcrypt.hash(data.password, 10);
-    const user = await prisma.user.create({
-      data: { ...data, password: hashed, role: data.role || 'staff' },
-    });
-
-    return { id: user.id, username: user.username, name: user.name, role: user.role };
+  /**
+   * Hash password theo chính sách hiện hành. Dùng chung cho user.service / seed.
+   */
+  async hashPassword(plain: string): Promise<string> {
+    assertPasswordPolicy(plain);
+    return bcrypt.hash(plain, BCRYPT_ROUNDS);
   },
+
+  assertPasswordPolicy,
 
   async getMe(userId: number) {
     const user = await prisma.user.findUnique({

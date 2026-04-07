@@ -1,7 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'ke-toan-noi-bo-secret-2024';
+import { verifyToken } from '../utils/jwt';
 
 // ── Online user tracking ──────────────────────────────────────────────────────
 type OnlineEntry = { userId: number; username: string; name: string; role: string; ip: string; at: number };
@@ -27,7 +25,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
 
   const token = header.slice(7);
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as any;
+    const payload = verifyToken<any>(token);
     (req as any).user = payload;
 
     // Ghi nhận hoạt động (bỏ qua endpoint health-check để tránh spam)

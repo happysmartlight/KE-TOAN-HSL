@@ -1,5 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -48,9 +50,77 @@ function parseDbUrl(url: string) {
   };
 }
 
-// Allow all origins — needed for LAN mobile access
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+// ── Trust proxy ──
+// Backend chạy sau nginx/caddy → tin tưởng X-Forwarded-* từ 1 hop ngược lại,
+// để req.ip phản ánh IP client thật (cần cho rate-limit & audit log).
+app.set('trust proxy', 1);
+
+// ── CORS whitelist ──
+// ALLOWED_ORIGINS = danh sách origin cách nhau bằng dấu phẩy
+// (vd: "https://ketoan.example.com,https://lan.example.com").
+// Bỏ trống → đồng nghĩa same-origin only (frontend đã được serve cùng host).
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Same-origin / curl / server-to-server (no Origin header) → cho qua.
+      if (!origin) return cb(null, true);
+      if (ALLOWED_ORIGINS.length === 0) return cb(null, false);
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error('Origin không được phép'));
+    },
+    credentials: true,
+  }),
+);
+
+// ── Security headers (helmet) ──
+// CSP để mặc định an toàn cho SPA: chỉ cho phép tài nguyên cùng origin
+// + inline style cho Tailwind/Vite và data:/blob: cho ảnh.
+// Nếu bạn nhúng iframe / font CDN ngoài, mở rộng ở đây.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc:  ["'self'"],
+        styleSrc:   ["'self'", "'unsafe-inline'"],
+        imgSrc:     ["'self'", 'data:', 'blob:'],
+        fontSrc:    ["'self'", 'data:'],
+        connectSrc: ["'self'"],
+        objectSrc:  ["'none'"],
+        frameAncestors: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    // HSTS chỉ có hiệu lực khi truy cập qua HTTPS — nginx sẽ xử lý cert.
+    hsts: { maxAge: 60 * 60 * 24 * 180, includeSubDomains: true },
+  }),
+);
+
+app.use(express.json({ limit: '2mb' }));
+
+// ── Rate limit ──
+// Auth endpoints (login...) — chống brute-force credential.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 phút
+  limit: 10,                // tối đa 10 request / IP / 15 phút
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Quá nhiều lần thử. Hãy đợi vài phút rồi thử lại.' },
+});
+// Global limiter — chống abuse / scrape.
+const globalLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 phút
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+});
+app.use('/api/', globalLimiter);
 
 // ── Global error logger middleware ──
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -77,7 +147,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // Public routes
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authLimiter, authRouter);
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

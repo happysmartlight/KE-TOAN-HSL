@@ -13,17 +13,6 @@ export const authController = {
     }
   },
 
-  async register(req: Request, res: Response) {
-    try {
-      const { username, password, name, role } = req.body;
-      if (!username || !password || !name) return res.status(400).json({ error: 'Thiếu thông tin' });
-      const user = await authService.register({ username, password, name, role });
-      res.status(201).json(user);
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
-    }
-  },
-
   async getMe(req: Request, res: Response) {
     try {
       const user = await authService.getMe((req as any).user.id);
