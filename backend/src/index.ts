@@ -1,3 +1,6 @@
+// PHẢI load .env TRƯỚC khi import './app' — vì app.ts đọc process.env.ALLOWED_ORIGINS
+// ở top-level lúc module load. Nếu không pre-load, biến sẽ undefined → CORS chặn frontend.
+import 'dotenv/config';
 import { app } from './app';
 import { cashflowCategoryService } from './modules/cashflow-category/cashflow-category.service';
 import { backupService } from './modules/backup/backup.service';
