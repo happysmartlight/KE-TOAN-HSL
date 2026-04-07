@@ -608,6 +608,26 @@ select.inp option{background:var(--bg-card);color:var(--text)}
 .blink{animation:blink 1s step-end infinite}
 
 /* ═══════════════════════════════════════
+   UPDATE LOG BOX (SystemHealth → Cập nhật)
+   Font tối ưu cho tiếng Việt — JetBrains Mono có đầy đủ dấu
+   ═══════════════════════════════════════ */
+.update-log-box{
+  font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'Fira Code',
+               SFMono-Regular, Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  font-feature-settings: "liga" 0, "calt" 0;
+  font-variant-ligatures: none;
+  -webkit-font-smoothing: antialiased;
+}
+@media (max-width: 768px){
+  .update-log-box{ font-size: 11px; line-height: 1.6; padding: 8px 10px !important }
+}
+@media (max-width: 480px){
+  .update-log-box{ font-size: 10.5px; line-height: 1.55 }
+}
+
+/* ═══════════════════════════════════════
    RESPONSIVE — MOBILE (≤ 768px)
    ═══════════════════════════════════════ */
 @media (max-width: 768px) {

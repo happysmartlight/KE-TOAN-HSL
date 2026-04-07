@@ -683,7 +683,7 @@ export default function SystemHealth() {
                     </div>
                     <pre
                       style={{
-                        margin: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7,
+                        margin: 0, fontFamily: "ui-monospace, 'JetBrains Mono', 'Cascadia Code', 'Fira Code', SFMono-Regular, Menlo, Consolas, monospace", fontSize: 11.5, lineHeight: 1.65,
                         color: 'var(--text-bright)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                         background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(0,245,255,0.08)',
                         borderRadius: 4, padding: '8px 12px',
@@ -705,7 +705,7 @@ export default function SystemHealth() {
                         <pre
                           key={i}
                           style={{
-                            margin: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7,
+                            margin: 0, fontFamily: "ui-monospace, 'JetBrains Mono', 'Cascadia Code', 'Fira Code', SFMono-Regular, Menlo, Consolas, monospace", fontSize: 11.5, lineHeight: 1.65,
                             color: 'var(--text-bright)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                             background: 'rgba(0,0,0,0.25)',
                             borderLeft: '2px solid var(--cyan)',
@@ -734,12 +734,12 @@ export default function SystemHealth() {
               </div>
               <div
                 ref={logBoxRef}
+                className="update-log-box"
                 style={{
-                  fontFamily: 'monospace', fontSize: 11, lineHeight: 1.7,
                   maxHeight: 360, overflowY: 'auto',
                   background: 'rgba(0,0,0,0.3)', borderRadius: 4, padding: '10px 12px',
                   border: '1px solid rgba(0,245,255,0.08)',
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere',
                 }}
               >
                 {(upd.logs ?? []).map((line, i) => {
