@@ -35,7 +35,7 @@ export type UpdatePhase =
   | 'success'
   | 'error';
 
-export type CiStatus = 'passing' | 'failing' | 'unknown';
+export type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 
 export type UpdateState = {
   phase: UpdatePhase;
@@ -45,6 +45,8 @@ export type UpdateState = {
   commitsBehind?: number;
   newCommits?: string[];
   ciStatus?: CiStatus;
+  /** Short SHA mà ciStatus áp dụng (để UI hiển thị “CI của commit xxx”) */
+  ciStatusSha?: string;
   logs: string[];
   error?: string;
   checkedAt?: number;
@@ -87,28 +89,89 @@ const _run = (cmd: string, cwd?: string) =>
     )
   );
 
-// CI badge URL trên branch master
-const CI_BADGE_URL =
-  'https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg?branch=master';
+// Repo info cho GitHub API
+const GH_OWNER = 'happysmartlight';
+const GH_REPO  = 'KE-TOAN-HSL';
+const GH_API   = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}`;
 
-/** Fetch CI status từ badge SVG của GitHub Actions */
-async function _fetchCiStatus(): Promise<CiStatus> {
+/** Helper fetch có timeout (không phụ thuộc AbortSignal.timeout) */
+async function _fetchWithTimeout(url: string, ms = 10_000, init?: RequestInit): Promise<Response | null> {
   try {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 10_000);
-    const res = await fetch(CI_BADGE_URL, {
+    const timer = setTimeout(() => ctl.abort(), ms);
+    const res = await fetch(url, {
+      ...init,
       signal: ctl.signal,
-      headers: { 'Cache-Control': 'no-cache' },
+      headers: {
+        'User-Agent': 'ke-toan-noi-bo-update-check',
+        'Accept':     'application/vnd.github+json',
+        ...(init?.headers || {}),
+      },
     });
     clearTimeout(timer);
-    if (!res.ok) return 'unknown';
-    const text = await res.text();
-    if (/>\s*passing\s*</i.test(text) || /passing/i.test(text)) return 'passing';
-    if (/>\s*failing\s*</i.test(text) || /failing/i.test(text)) return 'failing';
-    return 'unknown';
+    return res;
   } catch {
-    return 'unknown';
+    return null;
   }
+}
+
+/** Lấy SHA full của commit master trên remote (không tải objects về) */
+async function _getRemoteMasterSha(): Promise<string | null> {
+  // Ưu tiên `git ls-remote` vì nhanh & nhẹ
+  try {
+    const out = await _run(`git -C "${PROJECT_ROOT}" ls-remote origin master`);
+    const sha = out.split(/\s+/)[0];
+    if (sha && /^[0-9a-f]{40}$/i.test(sha)) return sha;
+  } catch { /* fallback sang API */ }
+
+  // Fallback: GitHub API
+  const res = await _fetchWithTimeout(`${GH_API}/commits/master`);
+  if (!res || !res.ok) return null;
+  try {
+    const data: any = await res.json();
+    return typeof data?.sha === 'string' ? data.sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch CI status cho đúng một commit SHA cụ thể (không phải "latest trên branch").
+ * Dùng GitHub Checks API: /repos/{owner}/{repo}/commits/{sha}/check-runs
+ *
+ * Trạng thái trả về:
+ *  - 'pending'  nếu có bất kỳ check run nào chưa hoàn thành (queued / in_progress)
+ *  - 'failing'  nếu có check run nào kết luận failure/timed_out/cancelled/action_required
+ *  - 'passing'  nếu tất cả check run đã completed và conclusion là success/skipped/neutral
+ *  - 'unknown'  nếu không có check run nào, hoặc không fetch được
+ */
+async function _fetchCiStatusForSha(sha: string): Promise<CiStatus> {
+  const res = await _fetchWithTimeout(`${GH_API}/commits/${sha}/check-runs?per_page=100`);
+  if (!res || !res.ok) return 'unknown';
+  let data: any;
+  try { data = await res.json(); } catch { return 'unknown'; }
+
+  const runs: any[] = Array.isArray(data?.check_runs) ? data.check_runs : [];
+  if (runs.length === 0) return 'unknown';
+
+  // Có bất kỳ run nào chưa completed → CI còn đang chạy
+  if (runs.some((r) => r.status !== 'completed')) return 'pending';
+
+  const BAD = new Set(['failure', 'timed_out', 'cancelled', 'action_required', 'startup_failure']);
+  if (runs.some((r) => BAD.has(r.conclusion))) return 'failing';
+
+  const OK = new Set(['success', 'skipped', 'neutral']);
+  if (runs.every((r) => OK.has(r.conclusion))) return 'passing';
+
+  return 'unknown';
+}
+
+/** Lấy CI status cho commit master MỚI NHẤT trên remote, trả kèm short SHA */
+async function _fetchRemoteCi(): Promise<{ status: CiStatus; sha?: string }> {
+  const fullSha = await _getRemoteMasterSha();
+  if (!fullSha) return { status: 'unknown' };
+  const status = await _fetchCiStatusForSha(fullSha);
+  return { status, sha: fullSha.slice(0, 7) };
 }
 
 export type GroupName = 'customers' | 'suppliers' | 'products' | 'invoices' | 'purchases' | 'cashflow' | 'logs';
@@ -452,12 +515,13 @@ export const adminService = {
   async checkForUpdates(): Promise<void> {
     _updateState = { phase: 'checking', logs: [] };
     try {
-      // ── BƯỚC 1: Kiểm tra CI/CD TRƯỚC ─────────────────────────────────
-      // Nếu remote đang FAIL thì không tải gì thêm, báo lỗi ngay để tránh
-      // kéo code lỗi về máy local.
-      const ciStatus = await _fetchCiStatus();
+      // ── BƯỚC 1: Kiểm tra CI/CD CỦA ĐÚNG COMMIT MỚI NHẤT ──────────────
+      // Không dùng badge ?branch=master vì nó chỉ phản ánh run cuối cùng
+      // đã completed — có thể chưa phải là của commit mới nhất nếu CI còn
+      // đang chạy. Dùng GitHub Checks API cho SHA cụ thể.
+      const { status: ciStatus, sha: ciStatusSha } = await _fetchRemoteCi();
 
-      // Luôn lấy commit hiện tại của local để hiển thị, dù CI có fail
+      // Luôn lấy commit hiện tại của local để hiển thị, dù CI có fail/pending
       const currentLocal = await _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`).catch(() => '');
       const currentMsgLocal = await _run(`git -C "${PROJECT_ROOT}" log HEAD -1 --pretty=format:%B`).catch(() => '');
 
@@ -465,19 +529,39 @@ export const adminService = {
         _updateState = {
           phase: 'error',
           ciStatus,
+          ciStatusSha,
           currentCommit: currentLocal || undefined,
           currentMessage: currentMsgLocal ? currentMsgLocal.trim() : undefined,
+          remoteCommit: ciStatusSha,
           logs: [],
           error:
-            'CI/CD trên remote đang FAIL — tạm dừng kiểm tra cập nhật. ' +
+            `CI/CD của commit ${ciStatusSha ?? 'mới nhất'} đang FAIL — tạm dừng kiểm tra cập nhật. ` +
             'Vui lòng đợi maintainer sửa rồi thử lại. ' +
-            'Chi tiết: https://github.com/happysmartlight/KE-TOAN-HSL/actions',
+            `Chi tiết: https://github.com/${GH_OWNER}/${GH_REPO}/actions`,
           checkedAt: Date.now(),
         };
         return;
       }
 
-      // ── BƯỚC 2: CI pass hoặc unknown → fetch commit info ─────────────
+      if (ciStatus === 'pending') {
+        _updateState = {
+          phase: 'error',
+          ciStatus,
+          ciStatusSha,
+          currentCommit: currentLocal || undefined,
+          currentMessage: currentMsgLocal ? currentMsgLocal.trim() : undefined,
+          remoteCommit: ciStatusSha,
+          logs: [],
+          error:
+            `CI/CD của commit ${ciStatusSha ?? 'mới nhất'} vẫn đang chạy — ` +
+            'vui lòng chờ CI hoàn tất rồi kiểm tra lại. ' +
+            `Chi tiết: https://github.com/${GH_OWNER}/${GH_REPO}/actions`,
+          checkedAt: Date.now(),
+        };
+        return;
+      }
+
+      // ── BƯỚC 2: CI pass (hoặc unknown) → fetch commit info ───────────
       await _run(`git -C "${PROJECT_ROOT}" fetch origin master`);
       const [current, remote, countStr, newLog, currentMsg] = await Promise.all([
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`),
@@ -499,6 +583,7 @@ export const adminService = {
         commitsBehind,
         newCommits,
         ciStatus,
+        ciStatusSha,
         logs: [],
         checkedAt: Date.now(),
       };
@@ -516,18 +601,23 @@ export const adminService = {
       return { ok: true }; // đang chạy rồi, frontend poll tiếp
     }
 
-    // ── Re-check CI/CD ngay trước khi pull ────────────────────────────
+    // ── Re-check CI/CD cho đúng SHA commit mới nhất ngay trước khi pull ──
     // Tránh race condition: checkForUpdates trước đó thấy CI pass, nhưng
-    // đến lúc user bấm "Cập nhật ngay" thì CI vừa chuyển sang fail.
-    const ciStatus = await _fetchCiStatus();
-    if (ciStatus === 'failing') {
+    // đến lúc user bấm "Cập nhật ngay" thì commit mới đã được push hoặc
+    // CI vừa chuyển sang fail/pending.
+    const { status: ciStatus, sha: ciStatusSha } = await _fetchRemoteCi();
+
+    if (ciStatus === 'failing' || ciStatus === 'pending') {
+      const msg =
+        ciStatus === 'failing'
+          ? `CI/CD của commit ${ciStatusSha ?? 'mới nhất'} đang FAIL — huỷ cập nhật để tránh kéo code lỗi về.`
+          : `CI/CD của commit ${ciStatusSha ?? 'mới nhất'} vẫn đang chạy — vui lòng chờ CI hoàn tất rồi thử lại.`;
       _updateState = {
         ..._updateState,
         phase: 'error',
         ciStatus,
-        error:
-          'CI/CD trên remote đang FAIL — huỷ cập nhật để tránh kéo code lỗi về. ' +
-          'Chi tiết: https://github.com/happysmartlight/KE-TOAN-HSL/actions',
+        ciStatusSha,
+        error: `${msg} Chi tiết: https://github.com/${GH_OWNER}/${GH_REPO}/actions`,
         checkedAt: Date.now(),
       };
       return { ok: false, error: _updateState.error };
@@ -541,11 +631,12 @@ export const adminService = {
       remoteCommit: _updateState.remoteCommit,
       commitsBehind: _updateState.commitsBehind,
       ciStatus,
+      ciStatusSha,
       logs: [`[${new Date().toLocaleString('vi-VN')}] Bắt đầu cập nhật hệ thống...`],
     };
     _appendUpdateLog(_updateState.logs[0]);
     if (ciStatus === 'passing') {
-      _appendUpdateLog('✔ CI/CD PASS — tiến hành kéo code mới...');
+      _appendUpdateLog(`✔ CI/CD PASS cho commit ${ciStatusSha ?? '?'} — tiến hành kéo code mới...`);
     } else {
       _appendUpdateLog('⚠ Không xác định được CI/CD status — tiếp tục cẩn thận...');
     }

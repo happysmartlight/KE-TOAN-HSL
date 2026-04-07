@@ -68,7 +68,7 @@ function StatusDot({ ok }: { ok: boolean }) {
 }
 
 type UpdatePhase = 'idle' | 'checking' | 'up_to_date' | 'update_available' | 'updating' | 'success' | 'error';
-type CiStatus = 'passing' | 'failing' | 'unknown';
+type CiStatus = 'passing' | 'failing' | 'pending' | 'unknown';
 type UpdateState = {
   phase: UpdatePhase;
   currentCommit?: string;
@@ -77,6 +77,7 @@ type UpdateState = {
   commitsBehind?: number;
   newCommits?: string[];
   ciStatus?: CiStatus;
+  ciStatusSha?: string;
   logs: string[];
   error?: string;
   checkedAt?: number;
@@ -615,8 +616,14 @@ export default function SystemHealth() {
                       <button
                         className="btn yellow btn-sm"
                         onClick={handleUpdate}
-                        disabled={updBusy || upd.ciStatus === 'failing'}
-                        title={upd.ciStatus === 'failing' ? 'CI/CD đang FAIL trên remote — không thể cập nhật' : undefined}
+                        disabled={updBusy || upd.ciStatus === 'failing' || upd.ciStatus === 'pending'}
+                        title={
+                          upd.ciStatus === 'failing'
+                            ? `CI/CD cho commit ${upd.ciStatusSha ?? ''} đang FAIL — không thể cập nhật`
+                            : upd.ciStatus === 'pending'
+                            ? `CI/CD cho commit ${upd.ciStatusSha ?? ''} đang chạy — chờ hoàn tất`
+                            : undefined
+                        }
                       >
                         ⬆ Cập nhật ngay
                       </button>
@@ -647,8 +654,16 @@ export default function SystemHealth() {
                         {upd.ciStatus === 'failing' && (
                           <span className="tag red" style={{ fontSize: 10 }}>FAILING ✗</span>
                         )}
+                        {upd.ciStatus === 'pending' && (
+                          <span className="tag cyan" style={{ fontSize: 10 }}>RUNNING ⟳</span>
+                        )}
                         {upd.ciStatus === 'unknown' && (
                           <span className="tag yellow" style={{ fontSize: 10 }}>UNKNOWN ?</span>
+                        )}
+                        {upd.ciStatusSha && (
+                          <span className="c-dim" style={{ marginLeft: 4, fontFamily: 'monospace' }}>
+                            @ {upd.ciStatusSha}
+                          </span>
                         )}
                       </span>
                     )}
