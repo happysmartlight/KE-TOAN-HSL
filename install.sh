@@ -83,6 +83,7 @@ gen_pass() {
 
 # Thử đọc giá trị cũ từ backend/.env để offer tái sử dụng
 EXISTING_DB_NAME=""; EXISTING_DB_USER=""; EXISTING_DB_PASS=""
+EXISTING_JWT=""; EXISTING_BIND=""; EXISTING_ADMIN_PASS=""
 if [ -f "$ENV_FILE" ]; then
   EXISTING_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" | sed -E 's/^DATABASE_URL=//; s/^"//; s/"$//')
   if [[ "$EXISTING_URL" =~ ^mysql://([^:@]+):(.*)@([^:@/]+):([0-9]+)/([^?]+) ]]; then
@@ -92,6 +93,49 @@ if [ -f "$ENV_FILE" ]; then
     # Thử URL-decode password (nếu đang ở dạng percent-encoded)
     EXISTING_DB_PASS=$(printf '%b' "${EXISTING_DB_PASS//%/\\x}")
   fi
+  EXISTING_JWT=$(grep "^JWT_SECRET=" "$ENV_FILE" | sed -E 's/^JWT_SECRET=//; s/^"//; s/"$//' || true)
+  EXISTING_BIND=$(grep "^BIND_HOST=" "$ENV_FILE" | sed -E 's/^BIND_HOST=//; s/^"//; s/"$//' || true)
+  EXISTING_ADMIN_PASS=$(grep "^INITIAL_ADMIN_PASSWORD=" "$ENV_FILE" | sed -E 's/^INITIAL_ADMIN_PASSWORD=//; s/^"//; s/"$//' || true)
+fi
+
+# ── 2b. Hỏi người dùng có muốn tái sử dụng .env cũ ──────────
+# Nếu .env có sẵn và "đầy đủ" (DATABASE_URL hợp lệ + JWT_SECRET đủ mạnh),
+# offer tái sử dụng → bỏ qua mọi prompt về DB / JWT / BIND_HOST / admin pass.
+# Nếu user chọn tạo mới, backup .env cũ thành .env.bak.<timestamp> rồi xoá.
+REUSE_ENV=0
+ENV_LOOKS_VALID=0
+if [ -n "$EXISTING_DB_NAME" ] && [ -n "$EXISTING_DB_USER" ] && [ -n "$EXISTING_DB_PASS" ] && [ ${#EXISTING_JWT} -ge 32 ]; then
+  ENV_LOOKS_VALID=1
+fi
+
+if [ -t 0 ] && [ "$ENV_LOOKS_VALID" = "1" ]; then
+  echo ""
+  info "Phát hiện file backend/.env có sẵn:"
+  echo "    DATABASE_URL    : mysql://${EXISTING_DB_USER}:***@localhost/${EXISTING_DB_NAME}"
+  echo "    JWT_SECRET      : *** (${#EXISTING_JWT} ký tự)"
+  echo "    BIND_HOST       : ${EXISTING_BIND:-127.0.0.1}"
+  echo "    INITIAL_ADMIN_  : $([ -n "$EXISTING_ADMIN_PASS" ] && echo "đã set" || echo "chưa set")"
+  echo ""
+  echo "    1) Sử dụng lại .env hiện tại — bỏ qua mọi câu hỏi cấu hình"
+  echo "    2) Tạo mới (.env cũ sẽ được backup thành .env.bak.<timestamp>)"
+  read -r -p "  Chọn [1/2] (mặc định: 1): " IN_REUSE
+  case "$IN_REUSE" in
+    2)
+      BACKUP_NAME="${ENV_FILE}.bak.$(date +%Y%m%d-%H%M%S)"
+      mv "$ENV_FILE" "$BACKUP_NAME"
+      log "Đã backup .env cũ → $(basename "$BACKUP_NAME")"
+      # Reset các biến để flow dưới chạy lại từ đầu
+      EXISTING_DB_NAME=""; EXISTING_DB_USER=""; EXISTING_DB_PASS=""
+      EXISTING_JWT=""; EXISTING_BIND=""; EXISTING_ADMIN_PASS=""
+      ;;
+    *)
+      REUSE_ENV=1
+      DB_NAME="$EXISTING_DB_NAME"
+      DB_USER="$EXISTING_DB_USER"
+      DB_PASS="$EXISTING_DB_PASS"
+      log "Sẽ sử dụng lại .env hiện tại."
+      ;;
+  esac
 fi
 
 # Interactive / non-interactive
@@ -100,7 +144,7 @@ DEFAULT_DB_USER="${DB_USER:-${EXISTING_DB_USER:-ketoan}}"
 DEFAULT_DB_PASS="${DB_PASS:-${EXISTING_DB_PASS:-}}"
 
 # Nếu STDIN là TTY và chưa được cung cấp sẵn qua env → hỏi người dùng
-if [ -t 0 ] && [ -z "$DB_NAME" ] && [ -z "$DB_USER" ] && [ -z "$DB_PASS" ]; then
+if [ "$REUSE_ENV" != "1" ] && [ -t 0 ] && [ -z "$DB_NAME" ] && [ -z "$DB_USER" ] && [ -z "$DB_PASS" ]; then
   echo ""
   info "Thiết lập MariaDB — nhấn Enter để dùng giá trị mặc định trong [ngoặc]"
 
@@ -168,6 +212,10 @@ FLUSH PRIVILEGES;
 " && log "Database '${DB_NAME}' và user '${DB_USER}' đã sẵn sàng."
 
 # ── 4. Tạo / cập nhật backend/.env ──────────────────────────
+# Nếu REUSE_ENV=1, bỏ qua toàn bộ block cấu hình .env (giữ nguyên file cũ).
+if [ "$REUSE_ENV" = "1" ]; then
+  log "Bỏ qua bước cập nhật backend/.env (đang reuse cấu hình hiện tại)."
+else
 if [ ! -f "$ENV_FILE" ]; then
   warn "Chưa có backend/.env — tạo từ .env.example..."
   cp "$BACKEND_DIR/.env.example" "$ENV_FILE"
@@ -210,7 +258,7 @@ fi
 CURRENT_BIND=$(grep "^BIND_HOST=" "$ENV_FILE" | sed -E 's/^BIND_HOST=//; s/^"//; s/"$//' || true)
 DEFAULT_BIND="${BIND_HOST:-${CURRENT_BIND:-127.0.0.1}}"
 
-if [ -t 0 ] && [ -z "$BIND_HOST" ]; then
+if [ "$REUSE_ENV" != "1" ] && [ -t 0 ] && [ -z "$BIND_HOST" ]; then
   echo ""
   info "Cấu hình BIND_HOST (host backend lắng nghe):"
   echo "    1) 127.0.0.1  — chỉ loopback, phải đặt sau nginx/caddy (an toàn nhất)"
@@ -237,7 +285,7 @@ log "BIND_HOST=${BIND_HOST}"
 # Backend chỉ tạo admin đầu tiên khi DB rỗng VÀ biến này được set. Nếu user
 # bỏ qua bước này, sẽ không thể đăng nhập lần đầu — đây là pain point hay gặp.
 CURRENT_ADMIN_PASS=$(grep "^INITIAL_ADMIN_PASSWORD=" "$ENV_FILE" | sed -E 's/^INITIAL_ADMIN_PASSWORD=//; s/^"//; s/"$//' || true)
-if [ -t 0 ] && [ -z "$INITIAL_ADMIN_PASSWORD" ] && [ -z "$CURRENT_ADMIN_PASS" ]; then
+if [ "$REUSE_ENV" != "1" ] && [ -t 0 ] && [ -z "$INITIAL_ADMIN_PASSWORD" ] && [ -z "$CURRENT_ADMIN_PASS" ]; then
   echo ""
   info "Mật khẩu admin đầu tiên (lưu vào INITIAL_ADMIN_PASSWORD):"
   echo "    Yêu cầu: ≥12 ký tự, có ít nhất 3/4 nhóm: chữ thường, HOA, số, ký tự đặc biệt."
@@ -273,6 +321,13 @@ if [ -n "$INITIAL_ADMIN_PASSWORD" ]; then
     echo "INITIAL_ADMIN_PASSWORD=\"${INITIAL_ADMIN_PASSWORD}\"" >> "$ENV_FILE"
   fi
   log "Đã set INITIAL_ADMIN_PASSWORD."
+fi
+
+fi  # end if REUSE_ENV != 1 — kết thúc block 4/4b/4c
+
+# Khi reuse, set BIND_HOST từ giá trị cũ để summary cuối hiển thị đúng URL.
+if [ "$REUSE_ENV" = "1" ]; then
+  BIND_HOST="${EXISTING_BIND:-127.0.0.1}"
 fi
 
 # ── 5. Cài PM2 nếu chưa có ───────────────────────────────────
@@ -386,7 +441,7 @@ else
   echo "   LAN:       cần reverse proxy (nginx/caddy) hoặc đổi BIND_HOST=0.0.0.0 trong backend/.env"
 fi
 echo ""
-if [ -z "$INITIAL_ADMIN_PASSWORD" ] && [ -z "$CURRENT_ADMIN_PASS" ]; then
+if [ -z "$INITIAL_ADMIN_PASSWORD" ] && [ -z "$CURRENT_ADMIN_PASS" ] && [ -z "$EXISTING_ADMIN_PASS" ]; then
   warn "Chưa set INITIAL_ADMIN_PASSWORD!"
   echo "       Mở backend/.env, đặt INITIAL_ADMIN_PASSWORD=\"...\" (≥12 ký tự, 3/4 nhóm),"
   echo "       rồi chạy: pm2 restart ke-toan-backend"
