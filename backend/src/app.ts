@@ -101,6 +101,12 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false,
+    // COOP và Origin-Agent-Cluster chỉ có hiệu lực trên secure context
+    // (HTTPS hoặc localhost). Trên LAN HTTP (vd 192.168.x.x) browser sẽ
+    // ignore và warn trong console. Tắt mặc định, bật lại cùng với HSTS
+    // khi deploy sau reverse proxy HTTPS.
+    crossOriginOpenerPolicy: process.env.ENABLE_HSTS === '1' ? undefined : false,
+    originAgentCluster:      process.env.ENABLE_HSTS === '1' ? undefined : false,
     // HSTS chỉ bật khi backend chắc chắn nằm sau HTTPS (nginx/caddy).
     // Mặc định TẮT để tránh ép browser upgrade sang https:// trên LAN HTTP
     // (gây ERR_SSL_PROTOCOL_ERROR). Bật bằng ENABLE_HSTS=1 trong production.
