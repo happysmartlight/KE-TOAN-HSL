@@ -520,3 +520,51 @@ Nếu lỗi vẫn xảy ra:
 cd backend && npm install --include=dev
 cd ../frontend && npm install
 ```
+
+**Login báo "Network error" / không kết nối được server (dev mode)**  
+Lần lượt kiểm tra:
+1. Backend có đang chạy không? `netstat -ano | grep 3001` (Windows) hoặc `ss -tlnp | grep 3001` (Linux). Nếu không thấy, cd vào `backend/` chạy `npm run dev`.
+2. File `backend/.env` có tồn tại không? Nếu mất, copy lại từ `.env.example` và điền `DATABASE_URL`, `JWT_SECRET`, `INITIAL_ADMIN_PASSWORD`.
+3. Sau khi sửa `.env`, **phải restart backend thủ công** (`Ctrl+C` rồi `npm run dev` lại) — ts-node-dev không tự reload khi `.env` đổi.
+4. Test trực tiếp bằng curl để loại trừ vấn đề browser:
+   ```bash
+   curl -X POST http://localhost:3001/api/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"<mật khẩu>"}'
+   ```
+   - Trả `{"error":"Sai tên..."}` → backend OK, chỉ là sai credentials.
+   - Trả `Connection refused` → backend chưa chạy.
+5. Nếu frontend chạy ở origin khác backend (vd `localhost:5173` → `localhost:3001`), thêm origin vào `ALLOWED_ORIGINS` trong `backend/.env`:
+   ```env
+   ALLOWED_ORIGINS=http://localhost:5173,http://192.168.1.x:5173
+   ```
+
+**Quên mật khẩu admin / cần reset password**
+```bash
+cd backend
+node -e "const{PrismaClient}=require('@prisma/client');const b=require('bcryptjs');(async()=>{const p=new PrismaClient();await p.user.update({where:{username:'admin'},data:{password:await b.hash('MatKhauMoi@123',10)}});console.log('OK');await p.\$disconnect();})()"
+```
+Đổi `MatKhauMoi@123` thành mật khẩu bạn muốn. Áp dụng cho cả dev lẫn Pi.
+
+**Truy cập `http://<IP-Pi>:3001` báo `Cannot GET /` (production)**  
+Backend chạy bình thường nhưng không serve frontend → thiếu thư mục/symlink `backend/public`. Express serve frontend từ `backend/public/`, mặc định `install.sh` / `deploy.sh` sẽ copy `frontend/dist` vào đây. Nếu vì lý do nào đó folder bị mất, tạo lại bằng symlink:
+```bash
+cd ~/KE-TOAN-HSL
+ln -sfn $(pwd)/frontend/dist $(pwd)/backend/public
+pm2 restart ke-toan-backend
+```
+
+**Wipe toàn bộ database và làm lại từ đầu (dev hoặc Pi)**
+```bash
+cd backend
+# Dừng backend trước (Ctrl+C nếu dev, pm2 stop ke-toan-backend nếu Pi)
+npx prisma db push --force-reset --accept-data-loss
+npx prisma db seed   # tùy chọn — chỉ nếu muốn dữ liệu mẫu (dev)
+# Khởi động lại backend, admin sẽ tự tạo theo INITIAL_ADMIN_PASSWORD trong .env
+```
+
+**Bật full security headers khi deploy sau HTTPS reverse proxy**  
+Khi đặt backend sau nginx/caddy có TLS, set biến môi trường để bật HSTS + COOP + Origin-Agent-Cluster cùng lúc:
+```env
+# backend/.env
+ENABLE_HSTS=1
+```
+Mặc định 3 header này tắt vì trên LAN HTTP (vd `192.168.1.x`) browser sẽ ignore và in warning trong console. Khi đã có HTTPS thật thì bật lại để tận dụng tối đa security.
