@@ -137,11 +137,13 @@ jobs:
         run: |
           for /f %%c in ('mysql -u root -p%CI_MYSQL_ROOT_PASS% -N -B -e "USE %CI_DB_NAME%; SHOW TABLES;" ^| find /c /v ""') do set "TBL=%%c"
           echo Tables count: %TBL%
-          if %TBL% LSS 5 (
-            echo ::error::Database has only %TBL% tables (expected ^>=5)
-            exit /b 1
-          )
+          if %TBL% LSS 5 goto :tblfail
           echo OK Database has %TBL% tables
+          goto :tblok
+          :tblfail
+          echo ::error::Database has only %TBL% tables expected at least 5
+          exit /b 1
+          :tblok
 
       - name: Smoke test backend dev server
         shell: powershell
