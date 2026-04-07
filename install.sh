@@ -160,7 +160,10 @@ sudo mysql -e "
 CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('${DB_PASS_SQL}');
 ALTER USER '${DB_USER}'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('${DB_PASS_SQL}');
-GRANT ALL PRIVILEGES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
+-- Least privilege: chỉ cấp quyền DML/DDL cần cho Prisma migrate + runtime,
+-- KHÔNG cấp ALL PRIVILEGES (loại bỏ FILE, SUPER, GRANT OPTION, PROCESS...).
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM '${DB_USER}'@'localhost';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, ALTER, INDEX, REFERENCES, CREATE VIEW, SHOW VIEW, TRIGGER, CREATE ROUTINE, ALTER ROUTINE, EXECUTE, LOCK TABLES ON \`${DB_NAME}\`.* TO '${DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 " && log "Database '${DB_NAME}' và user '${DB_USER}' đã sẵn sàng."
 
@@ -250,10 +253,12 @@ echo ""
 echo "=================================================="
 log "Hoàn tất! Truy cập hệ thống:"
 echo ""
-echo "   Local:  http://localhost:3001"
-echo "   LAN:    http://$LAN_IP:3001"
+echo "   Local:  http://127.0.0.1:3001  (backend listen 127.0.0.1 mặc định)"
+echo "   LAN:    cần đặt sau reverse proxy (nginx/caddy) để truy cập từ $LAN_IP"
+echo "           hoặc set BIND_HOST=0.0.0.0 trong backend/.env (KHÔNG khuyến nghị)."
 echo ""
-echo "   Tài khoản mặc định: admin / admin123"
-echo "   ⚠️  Đổi mật khẩu sau khi đăng nhập lần đầu!"
+echo "   Lần đầu chạy: hãy đặt INITIAL_ADMIN_PASSWORD trong backend/.env"
+echo "                 (≥12 ký tự, gồm 3/4 nhóm chữ thường/HOA/số/đặc biệt) rồi restart."
+echo "                 Sau khi đăng nhập lần đầu, đổi mật khẩu và xoá biến này khỏi .env."
 echo "=================================================="
 echo ""

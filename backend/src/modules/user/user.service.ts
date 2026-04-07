@@ -1,5 +1,9 @@
 import bcrypt from 'bcryptjs';
 import prisma from '../../utils/prisma';
+import { authService } from '../auth/auth.service';
+
+const BCRYPT_ROUNDS = 12;
+const ALLOWED_ROLES = new Set(['admin', 'staff']);
 
 const USER_SELECT = {
   id: true, username: true, name: true, role: true,
@@ -29,13 +33,14 @@ export const userService = {
   }) {
     const exists = await prisma.user.findUnique({ where: { username: data.username } });
     if (exists) throw new Error('Tên đăng nhập đã tồn tại');
-    const hashed = await bcrypt.hash(data.password, 10);
+    const hashed = await authService.hashPassword(data.password);
+    const role = ALLOWED_ROLES.has(data.role) ? data.role : 'staff';
     return prisma.user.create({
       data: {
         username: data.username,
         password: hashed,
         name: data.name,
-        role: data.role || 'staff',
+        role,
         email: data.email || null,
         phone: data.phone || null,
         startDate: data.startDate ? new Date(data.startDate) : null,
@@ -51,8 +56,11 @@ export const userService = {
   }) {
     const update: any = {};
     if (data.name !== undefined) update.name = data.name;
-    if (data.role !== undefined) update.role = data.role;
-    if (data.password) update.password = await bcrypt.hash(data.password, 10);
+    if (data.role !== undefined) {
+      if (!ALLOWED_ROLES.has(data.role)) throw new Error('Role không hợp lệ');
+      update.role = data.role;
+    }
+    if (data.password) update.password = await authService.hashPassword(data.password);
     if (data.email !== undefined) update.email = data.email || null;
     if (data.phone !== undefined) update.phone = data.phone || null;
     if (data.startDate !== undefined) update.startDate = data.startDate ? new Date(data.startDate) : null;
@@ -68,8 +76,7 @@ export const userService = {
     const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const valid = await bcrypt.compare(currentPassword, user.password);
     if (!valid) throw new Error('Mật khẩu hiện tại không đúng');
-    if (newPassword.length < 6) throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự');
-    const hashed = await bcrypt.hash(newPassword, 10);
+    const hashed = await authService.hashPassword(newPassword);
     await prisma.user.update({ where: { id: userId }, data: { password: hashed } });
   },
 

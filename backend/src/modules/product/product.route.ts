@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { productController } from './product.controller';
+import { requireAdmin } from '../../middleware/auth.middleware';
 
 export const productRouter = Router();
 
@@ -8,4 +9,5 @@ productRouter.get('/dashboard', productController.getDashboard);
 productRouter.get('/:id', productController.getById);
 productRouter.post('/', productController.create);
 productRouter.put('/:id', productController.update);
-productRouter.delete('/:id', productController.delete);
+// Xoá sản phẩm → admin only.
+productRouter.delete('/:id', requireAdmin, productController.delete);
