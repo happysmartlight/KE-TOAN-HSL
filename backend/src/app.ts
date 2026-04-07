@@ -94,6 +94,10 @@ app.use(
         connectSrc: ["'self'"],
         objectSrc:  ["'none'"],
         frameAncestors: ["'none'"],
+        // TẮT upgrade-insecure-requests: directive này ép browser upgrade
+        // mọi http:// → https://, gây ERR_SSL_PROTOCOL_ERROR khi deploy LAN
+        // HTTP thuần (Pi không có cert). Bật lại bằng ENABLE_HSTS=1.
+        ...(process.env.ENABLE_HSTS === '1' ? {} : { upgradeInsecureRequests: null }),
       },
     },
     crossOriginEmbedderPolicy: false,
