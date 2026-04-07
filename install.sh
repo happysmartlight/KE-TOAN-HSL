@@ -185,17 +185,94 @@ else
 fi
 log "Đã cập nhật DATABASE_URL trong backend/.env"
 
-# Tự sinh JWT_SECRET ngẫu nhiên nếu đang dùng giá trị mặc định / để trống
+# Tự sinh JWT_SECRET ngẫu nhiên nếu đang dùng giá trị mặc định / để trống / quá ngắn.
+# Backend yêu cầu JWT_SECRET >= 32 ký tự, dùng `openssl rand -hex 64` cho ra 128 ký tự.
 CURRENT_JWT=$(grep "^JWT_SECRET=" "$ENV_FILE" | sed -E 's/^JWT_SECRET=//; s/^"//; s/"$//' || true)
-if [ -z "$CURRENT_JWT" ] || [ "$CURRENT_JWT" = "ke-toan-noi-bo-secret-2025" ] || [ "$CURRENT_JWT" = "change-me" ]; then
-  NEW_JWT="$(gen_pass)$(gen_pass)"
+if [ -z "$CURRENT_JWT" ] || [ "$CURRENT_JWT" = "ke-toan-noi-bo-secret-2025" ] || [ "$CURRENT_JWT" = "change-me" ] || [ ${#CURRENT_JWT} -lt 32 ]; then
+  if command -v openssl &>/dev/null; then
+    NEW_JWT="$(openssl rand -hex 64)"
+  else
+    NEW_JWT="$(tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 128)"
+  fi
   ESCAPED_JWT=$(printf '%s' "$NEW_JWT" | sed -e 's/[\\&|]/\\&/g')
   if grep -q "^JWT_SECRET=" "$ENV_FILE"; then
     sed -i "s|^JWT_SECRET=.*|JWT_SECRET=\"${ESCAPED_JWT}\"|" "$ENV_FILE"
   else
     echo "JWT_SECRET=\"${NEW_JWT}\"" >> "$ENV_FILE"
   fi
-  log "Đã sinh JWT_SECRET ngẫu nhiên."
+  log "Đã sinh JWT_SECRET ngẫu nhiên (128 ký tự hex)."
+fi
+
+# ── 4b. Cấu hình BIND_HOST (Tailscale / LAN / loopback) ─────
+# Mặc định backend bind 127.0.0.1 để buộc đặt sau reverse proxy. Tuy nhiên với
+# môi trường nội bộ HSL (Tailscale, LAN cô lập) việc bind 0.0.0.0 là chấp nhận
+# được — cho phép user chọn ngay khi cài để tránh phải sửa tay sau đó.
+CURRENT_BIND=$(grep "^BIND_HOST=" "$ENV_FILE" | sed -E 's/^BIND_HOST=//; s/^"//; s/"$//' || true)
+DEFAULT_BIND="${BIND_HOST:-${CURRENT_BIND:-127.0.0.1}}"
+
+if [ -t 0 ] && [ -z "$BIND_HOST" ]; then
+  echo ""
+  info "Cấu hình BIND_HOST (host backend lắng nghe):"
+  echo "    1) 127.0.0.1  — chỉ loopback, phải đặt sau nginx/caddy (an toàn nhất)"
+  echo "    2) 0.0.0.0    — mọi interface, dùng cho Tailscale / LAN nội bộ"
+  read -r -p "  Chọn [1/2] (mặc định: $([ "$DEFAULT_BIND" = "0.0.0.0" ] && echo 2 || echo 1)): " BIND_CHOICE
+  case "$BIND_CHOICE" in
+    2) BIND_HOST="0.0.0.0" ;;
+    1) BIND_HOST="127.0.0.1" ;;
+    "") BIND_HOST="$DEFAULT_BIND" ;;
+    *) BIND_HOST="$DEFAULT_BIND" ;;
+  esac
+else
+  BIND_HOST="$DEFAULT_BIND"
+fi
+
+if grep -q "^BIND_HOST=" "$ENV_FILE"; then
+  sed -i "s|^BIND_HOST=.*|BIND_HOST=${BIND_HOST}|" "$ENV_FILE"
+else
+  echo "BIND_HOST=${BIND_HOST}" >> "$ENV_FILE"
+fi
+log "BIND_HOST=${BIND_HOST}"
+
+# ── 4c. Cấu hình INITIAL_ADMIN_PASSWORD ─────────────────────
+# Backend chỉ tạo admin đầu tiên khi DB rỗng VÀ biến này được set. Nếu user
+# bỏ qua bước này, sẽ không thể đăng nhập lần đầu — đây là pain point hay gặp.
+CURRENT_ADMIN_PASS=$(grep "^INITIAL_ADMIN_PASSWORD=" "$ENV_FILE" | sed -E 's/^INITIAL_ADMIN_PASSWORD=//; s/^"//; s/"$//' || true)
+if [ -t 0 ] && [ -z "$INITIAL_ADMIN_PASSWORD" ] && [ -z "$CURRENT_ADMIN_PASS" ]; then
+  echo ""
+  info "Mật khẩu admin đầu tiên (lưu vào INITIAL_ADMIN_PASSWORD):"
+  echo "    Yêu cầu: ≥12 ký tự, có ít nhất 3/4 nhóm: chữ thường, HOA, số, ký tự đặc biệt."
+  echo "    Để trống = bỏ qua (bạn sẽ phải set sau và restart trước khi đăng nhập lần đầu)."
+  while true; do
+    read -r -s -p "  Mật khẩu admin: " IN_ADMIN_PASS
+    echo ""
+    if [ -z "$IN_ADMIN_PASS" ]; then
+      INITIAL_ADMIN_PASSWORD=""
+      warn "Bỏ qua — nhớ set INITIAL_ADMIN_PASSWORD trong backend/.env trước khi đăng nhập lần đầu."
+      break
+    fi
+    if [ ${#IN_ADMIN_PASS} -lt 12 ]; then
+      warn "Mật khẩu phải ≥12 ký tự. Thử lại."
+      continue
+    fi
+    read -r -s -p "  Nhập lại     : " IN_ADMIN_PASS2
+    echo ""
+    if [ "$IN_ADMIN_PASS" != "$IN_ADMIN_PASS2" ]; then
+      warn "Hai lần nhập không khớp. Thử lại."
+      continue
+    fi
+    INITIAL_ADMIN_PASSWORD="$IN_ADMIN_PASS"
+    break
+  done
+fi
+
+if [ -n "$INITIAL_ADMIN_PASSWORD" ]; then
+  ESCAPED_ADMIN_PASS=$(printf '%s' "$INITIAL_ADMIN_PASSWORD" | sed -e 's/[\\&|]/\\&/g')
+  if grep -q "^INITIAL_ADMIN_PASSWORD=" "$ENV_FILE"; then
+    sed -i "s|^INITIAL_ADMIN_PASSWORD=.*|INITIAL_ADMIN_PASSWORD=\"${ESCAPED_ADMIN_PASS}\"|" "$ENV_FILE"
+  else
+    echo "INITIAL_ADMIN_PASSWORD=\"${INITIAL_ADMIN_PASSWORD}\"" >> "$ENV_FILE"
+  fi
+  log "Đã set INITIAL_ADMIN_PASSWORD."
 fi
 
 # ── 5. Cài PM2 nếu chưa có ───────────────────────────────────
@@ -249,16 +326,32 @@ echo ""
 
 # ── Done ─────────────────────────────────────────────────────
 LAN_IP=$(hostname -I | awk '{print $1}')
+TAILSCALE_IP=""
+if command -v tailscale &>/dev/null; then
+  TAILSCALE_IP=$(tailscale ip -4 2>/dev/null | head -1 || true)
+fi
+
 echo ""
 echo "=================================================="
 log "Hoàn tất! Truy cập hệ thống:"
 echo ""
-echo "   Local:  http://127.0.0.1:3001  (backend listen 127.0.0.1 mặc định)"
-echo "   LAN:    cần đặt sau reverse proxy (nginx/caddy) để truy cập từ $LAN_IP"
-echo "           hoặc set BIND_HOST=0.0.0.0 trong backend/.env (KHÔNG khuyến nghị)."
+echo "   Local:     http://127.0.0.1:3001"
+if [ "$BIND_HOST" = "0.0.0.0" ]; then
+  echo "   LAN:       http://${LAN_IP}:3001"
+  if [ -n "$TAILSCALE_IP" ]; then
+    echo "   Tailscale: http://${TAILSCALE_IP}:3001"
+  fi
+else
+  echo "   LAN:       cần reverse proxy (nginx/caddy) hoặc đổi BIND_HOST=0.0.0.0 trong backend/.env"
+fi
 echo ""
-echo "   Lần đầu chạy: hãy đặt INITIAL_ADMIN_PASSWORD trong backend/.env"
-echo "                 (≥12 ký tự, gồm 3/4 nhóm chữ thường/HOA/số/đặc biệt) rồi restart."
-echo "                 Sau khi đăng nhập lần đầu, đổi mật khẩu và xoá biến này khỏi .env."
+if [ -z "$INITIAL_ADMIN_PASSWORD" ] && [ -z "$CURRENT_ADMIN_PASS" ]; then
+  warn "Chưa set INITIAL_ADMIN_PASSWORD!"
+  echo "       Mở backend/.env, đặt INITIAL_ADMIN_PASSWORD=\"...\" (≥12 ký tự, 3/4 nhóm),"
+  echo "       rồi chạy: pm2 restart ke-toan-backend"
+else
+  echo "   Đăng nhập lần đầu: username=admin, password=<INITIAL_ADMIN_PASSWORD vừa set>"
+  echo "   Sau khi đăng nhập: đổi mật khẩu và XOÁ INITIAL_ADMIN_PASSWORD khỏi backend/.env"
+fi
 echo "=================================================="
 echo ""
