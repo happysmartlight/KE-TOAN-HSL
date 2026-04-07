@@ -291,8 +291,49 @@ npm install
 log "Prisma generate..."
 npx prisma generate
 
+# ── 7b. (Tùy chọn) Reset toàn bộ database ───────────────────
+# Khi cài lại lên DB cũ, hỏi người dùng có muốn XOÁ SẠCH dữ liệu không.
+# Mặc định: KHÔNG reset (an toàn). Yêu cầu xác nhận 2 lần để tránh tai nạn.
+RESET_DB=0
+EXISTING_TABLES=0
+if EXISTING_TABLES=$(sudo mysql "$DB_NAME" -N -B -e "SHOW TABLES" 2>/dev/null | wc -l); then
+  :
+fi
+
+if [ -t 0 ] && [ "$EXISTING_TABLES" -gt 0 ]; then
+  echo ""
+  warn "Database '${DB_NAME}' đã có ${EXISTING_TABLES} bảng (dữ liệu cũ)."
+  echo "    Bạn có muốn XOÁ TOÀN BỘ DỮ LIỆU và tạo lại từ đầu không?"
+  echo "    → Chọn 'không' nếu chỉ muốn cập nhật code (giữ nguyên dữ liệu)."
+  read -r -p "  Reset database? [y/N]: " IN_RESET
+  if [[ "$IN_RESET" =~ ^[Yy]$ ]]; then
+    echo ""
+    warn "⚠️  THAO TÁC NÀY KHÔNG THỂ HOÀN TÁC. Toàn bộ dữ liệu sẽ bị xoá vĩnh viễn."
+    echo "    Để xác nhận, gõ chính xác chữ 'YES' (in HOA):"
+    read -r -p "  Xác nhận lần 1: " IN_CONFIRM1
+    if [ "$IN_CONFIRM1" = "YES" ]; then
+      echo "    Gõ chính xác tên database '${DB_NAME}' để xác nhận lần cuối:"
+      read -r -p "  Xác nhận lần 2: " IN_CONFIRM2
+      if [ "$IN_CONFIRM2" = "$DB_NAME" ]; then
+        RESET_DB=1
+        warn "Đã xác nhận. Database sẽ bị wipe trong bước tiếp theo."
+      else
+        info "Tên database không khớp. Bỏ qua reset, giữ nguyên dữ liệu."
+      fi
+    else
+      info "Không xác nhận YES. Bỏ qua reset, giữ nguyên dữ liệu."
+    fi
+  fi
+fi
+
 log "Prisma push schema vào database..."
-npx prisma db push --accept-data-loss
+if [ "$RESET_DB" = "1" ]; then
+  warn "Đang wipe database '${DB_NAME}'..."
+  npx prisma db push --force-reset --accept-data-loss
+  log "Database đã được reset hoàn toàn."
+else
+  npx prisma db push --accept-data-loss
+fi
 
 # ── 8. Build backend ─────────────────────────────────────────
 log "Build backend TypeScript..."
