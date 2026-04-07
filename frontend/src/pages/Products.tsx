@@ -47,20 +47,22 @@ function SummaryCard({
 }) {
   return (
     <div
+      className="pd-summary-card"
       onClick={onClick}
       style={{
         background: 'var(--bg-card)', border: `1px solid ${color ? color + '33' : 'rgba(0,245,255,0.12)'}`,
         borderRadius: 6, padding: '16px 18px', cursor: onClick ? 'pointer' : 'default',
         transition: 'border-color 0.2s, transform 0.15s',
         boxShadow: color ? `0 0 18px ${color}0a` : undefined,
+        minWidth: 0,
       }}
       onMouseEnter={(e) => { if (onClick) (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; }}
       onMouseLeave={(e) => { if (onClick) (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; }}
     >
-      <div style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: color ?? 'var(--text-bright)', lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5, letterSpacing: 0.5 }}>{label}</div>
-      {sub && <div style={{ fontSize: 10, color: color ?? 'var(--cyan)', marginTop: 3 }}>{sub}</div>}
+      <div className="pd-summary-icon" style={{ fontSize: 22, marginBottom: 8 }}>{icon}</div>
+      <div className="pd-summary-value" style={{ fontSize: 22, fontWeight: 800, color: color ?? 'var(--text-bright)', lineHeight: 1, wordBreak: 'break-word' }}>{value}</div>
+      <div className="pd-summary-label" style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 5, letterSpacing: 0.5 }}>{label}</div>
+      {sub && <div className="pd-summary-sub" style={{ fontSize: 10, color: color ?? 'var(--cyan)', marginTop: 3, wordBreak: 'break-word' }}>{sub}</div>}
       {onClick && <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 6, letterSpacing: 1 }}>↗ Click để lọc</div>}
     </div>
   );
@@ -106,7 +108,7 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
   ];
 
   if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="product-dashboard" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* skeleton summary */}
       <div className="grid-6" style={{ marginBottom: 0 }}>
         {Array.from({ length: 6 }).map((_, i) => (
@@ -130,10 +132,10 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
   const { summary } = data;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="product-dashboard" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
       {/* ── Period selector ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div className="product-dashboard-period" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, color: 'var(--text-dim)', marginRight: 4 }}>Kỳ phân tích:</span>
         {periods.map((p) => (
           <button key={p.value} className={`btn ${days === p.value ? 'cyan' : 'ghost'} btn-sm`}
@@ -220,7 +222,7 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
                         {i < 3 ? MEDAL[i] : `${i + 1}.`}
                       </span>
                       {/* Tên đầy đủ — wrap nếu dài */}
-                      <span style={{ flex: 1, fontSize: 12, color: rank?.color ?? 'var(--text-bright)', lineHeight: 1.3, wordBreak: 'break-word' }}>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: rank?.color ?? 'var(--text-bright)', lineHeight: 1.3, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                         {p.name}
                       </span>
                       {/* Doanh thu + số lượng */}

@@ -658,6 +658,10 @@ select.inp option{background:var(--bg-card);color:var(--text)}
 
   /* Page title smaller */
   .page-title { font-size:12px }
+
+  /* Product dashboard tab — compact panels on tablets/phones */
+  .product-dashboard .form-panel { padding:12px 14px !important }
+  .product-dashboard .grid-3 { grid-template-columns:1fr }
 }
 
 @media (max-width: 480px) {
@@ -674,6 +678,15 @@ select.inp option{background:var(--bg-card);color:var(--text)}
   .btn-sm { min-height:36px }
   /* Inputs: 16px prevents iOS auto-zoom */
   input.inp,select.inp,textarea.inp { font-size:16px }
+
+  /* Product dashboard tab — phone tweaks */
+  .product-dashboard .form-panel { padding:11px 12px !important }
+  .product-dashboard .form-panel > div:first-child { font-size:10px !important }
+  .product-dashboard .pd-summary-card { padding:12px 12px !important }
+  .product-dashboard .pd-summary-icon { font-size:18px !important;margin-bottom:6px !important }
+  .product-dashboard .pd-summary-value { font-size:17px !important }
+  .product-dashboard .pd-summary-label { font-size:10px !important }
+  .product-dashboard .pd-summary-sub { font-size:9px !important }
 }
 
 /* ═══════════════════════════════════════
