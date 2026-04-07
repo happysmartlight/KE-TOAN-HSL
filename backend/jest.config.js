@@ -8,6 +8,9 @@ module.exports = {
       testMatch: ['**/__tests__/unit/**/*.test.ts'],
       transform: { '^.+\\.ts$': ['ts-jest', { tsconfig: { strict: false } }] },
       moduleFileExtensions: ['ts', 'js', 'json'],
+      // setEnv chạy trước khi test modules được load → đảm bảo JWT_SECRET đủ dài
+      // (utils/jwt.ts validate ngay tại import-time).
+      setupFiles: ['./__tests__/setup/setEnv.ts'],
       clearMocks: true,
     },
 

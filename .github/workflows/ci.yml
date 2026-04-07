@@ -73,7 +73,7 @@ jobs:
         run: npm run test:unit -- --ci
         env:
           DATABASE_URL: "mysql://root:root@localhost:3306/ke_toan_build"
-          JWT_SECRET: test-secret-for-ci
+          JWT_SECRET: test-secret-for-ci-do-not-use-in-production-0123456789abcdef
           NODE_ENV: test
 
   # ── Backend: system tests (MariaDB + supertest) ──────────────────────────────
@@ -123,7 +123,7 @@ jobs:
         run: npm run test:system -- --ci --runInBand
         env:
           DATABASE_URL: "mysql://ketoan:ketoantest@localhost:3306/ke_toan_test"
-          JWT_SECRET: test-secret-for-ci
+          JWT_SECRET: test-secret-for-ci-do-not-use-in-production-0123456789abcdef
           NODE_ENV: test
 
   # ── Frontend: type-check + build ─────────────────────────────────────────────

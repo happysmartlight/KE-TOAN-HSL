@@ -6,7 +6,8 @@ const TEST_DB_URL = process.env.DATABASE_URL || 'mysql://ketoan:ketoantest@local
 
 export default async function globalSetup() {
   process.env.DATABASE_URL = TEST_DB_URL;
-  process.env.JWT_SECRET   = 'test-secret-for-ci';
+  // Phải ≥32 ký tự (utils/jwt.ts validate ngay tại import)
+  process.env.JWT_SECRET   = process.env.JWT_SECRET || 'test-secret-for-ci-do-not-use-in-production-0123456789abcdef';
 
   // Reset schema và tạo lại toàn bộ bảng
   execSync('npx prisma db push --force-reset --skip-generate', {

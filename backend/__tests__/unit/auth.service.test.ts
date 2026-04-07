@@ -75,28 +75,19 @@ describe('authService.login()', () => {
   });
 });
 
-describe('authService.register()', () => {
-  it('throw khi username đã tồn tại', async () => {
-    mockFindUnique.mockResolvedValue(fakeUser);
-
-    await expect(
-      authService.register({ username: 'admin', password: 'pass', name: 'Duplicate' })
-    ).rejects.toThrow('Tên đăng nhập đã tồn tại');
+describe('authService.hashPassword()', () => {
+  it('throw khi password ngắn hơn 12 ký tự', async () => {
+    await expect(authService.hashPassword('short')).rejects.toThrow(/12 ký tự/);
   });
 
-  it('tạo user mới với role mặc định là staff', async () => {
-    mockFindUnique.mockResolvedValue(null);
-    mockHash.mockResolvedValue('$2a$10$newhash');
-    const newUser = { id: 2, username: 'newuser', name: 'New', role: 'staff' };
-    (prisma.user.create as jest.Mock).mockResolvedValue(newUser);
+  it('throw khi password thiếu nhóm ký tự (chỉ 2/4)', async () => {
+    await expect(authService.hashPassword('abcdefghijkl')).rejects.toThrow(/3 trong 4 nhóm/);
+  });
 
-    const result = await authService.register({
-      username: 'newuser',
-      password: 'pass123',
-      name: 'New',
-    });
-
-    expect(result.role).toBe('staff');
-    expect(result).not.toHaveProperty('password');
+  it('hash thành công khi password đạt policy', async () => {
+    mockHash.mockResolvedValue('$2a$12$newhash');
+    const result = await authService.hashPassword('Abcdef123!@#');
+    expect(result).toBe('$2a$12$newhash');
+    expect(mockHash).toHaveBeenCalledWith('Abcdef123!@#', 12);
   });
 });
