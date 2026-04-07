@@ -18,11 +18,10 @@ on:
 
 jobs:
   test-install-bat:
-    name: install.bat — Windows
+    name: install.bat - Windows
     runs-on: windows-latest
 
     env:
-      # Các giá trị này sẽ được feed vào install.bat qua stdin redirect
       CI_DB_NAME: ke_toan_ci
       CI_DB_USER: ketoan_ci
       CI_DB_PASS: CiTestPass123
@@ -40,20 +39,19 @@ jobs:
         shell: powershell
         run: |
           choco install mariadb -y --no-progress
-          # Đợi service start
           Start-Sleep -Seconds 5
           $svc = Get-Service -Name 'MariaDB' -ErrorAction SilentlyContinue
-          if (-not $svc) { Write-Error "MariaDB service không tồn tại"; exit 1 }
+          if (-not $svc) { Write-Error "MariaDB service not found"; exit 1 }
           if ($svc.Status -ne 'Running') { Start-Service MariaDB }
-          Write-Host "MariaDB service status: $((Get-Service MariaDB).Status)"
+          Write-Host ("MariaDB service status: " + (Get-Service MariaDB).Status)
 
       - name: Add MariaDB bin to PATH
         shell: powershell
         run: |
           $bin = Get-ChildItem 'C:\Program Files\MariaDB *\bin' -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $bin) { Write-Error "Không tìm thấy MariaDB bin folder"; exit 1 }
+          if (-not $bin) { Write-Error "MariaDB bin folder not found"; exit 1 }
           Add-Content $env:GITHUB_PATH $bin.FullName
-          Write-Host "Added to PATH: $($bin.FullName)"
+          Write-Host ("Added to PATH: " + $bin.FullName)
 
       - name: Verify mysql client and set root password
         shell: cmd
@@ -65,12 +63,12 @@ jobs:
       - name: Prepare stdin input file for install.bat
         shell: cmd
         run: |
-          REM Theo thứ tự prompt trong install.bat (fresh install, no existing .env):
-          REM   1. Ten database
-          REM   2. Ten user
-          REM   3. Mat khau user
-          REM   4. Mat khau root MariaDB
-          REM   5. Mat khau admin
+          REM Order of prompts in install.bat (fresh install, no existing .env):
+          REM   1. DB name
+          REM   2. DB user
+          REM   3. DB user password
+          REM   4. MariaDB root password
+          REM   5. Admin password
           (
             echo %CI_DB_NAME%
             echo %CI_DB_USER%
@@ -95,38 +93,37 @@ jobs:
         shell: powershell
         run: |
           if (-not (Test-Path "backend\.env")) {
-            Write-Error "backend\.env không tồn tại"
+            Write-Error "backend\.env not found"
             exit 1
           }
           $content = Get-Content "backend\.env" -Raw
-          if ($content -notmatch "DATABASE_URL=") { Write-Error "Thiếu DATABASE_URL"; exit 1 }
-          if ($content -notmatch "JWT_SECRET=") { Write-Error "Thiếu JWT_SECRET"; exit 1 }
-          if ($content -notmatch "INITIAL_ADMIN_PASSWORD=") { Write-Error "Thiếu INITIAL_ADMIN_PASSWORD"; exit 1 }
-          # Kiểm tra JWT_SECRET độ dài >=32
+          if ($content -notmatch "DATABASE_URL=") { Write-Error "Missing DATABASE_URL"; exit 1 }
+          if ($content -notmatch "JWT_SECRET=") { Write-Error "Missing JWT_SECRET"; exit 1 }
+          if ($content -notmatch "INITIAL_ADMIN_PASSWORD=") { Write-Error "Missing INITIAL_ADMIN_PASSWORD"; exit 1 }
           $jwt = (Select-String -Path "backend\.env" -Pattern '^JWT_SECRET="?([^"]+)"?$').Matches[0].Groups[1].Value
           if ($jwt.Length -lt 32) {
-            Write-Error "JWT_SECRET quá ngắn ($($jwt.Length) ký tự)"
+            Write-Error ("JWT_SECRET too short (" + $jwt.Length + " chars)")
             exit 1
           }
-          Write-Host "✓ backend\.env hợp lệ (JWT length=$($jwt.Length))"
+          Write-Host ("OK backend\.env valid (JWT length=" + $jwt.Length + ")")
 
       - name: Verify backend node_modules installed
         shell: powershell
         run: |
           if (-not (Test-Path "backend\node_modules\@prisma\client")) {
-            Write-Error "Prisma client chưa được cài"
+            Write-Error "Prisma client not installed"
             exit 1
           }
-          Write-Host "✓ backend dependencies OK"
+          Write-Host "OK backend dependencies"
 
       - name: Verify frontend node_modules installed
         shell: powershell
         run: |
           if (-not (Test-Path "frontend\node_modules\react")) {
-            Write-Error "React chưa được cài"
+            Write-Error "React not installed"
             exit 1
           }
-          Write-Host "✓ frontend dependencies OK"
+          Write-Host "OK frontend dependencies"
 
       - name: Verify database tables created
         shell: cmd
@@ -134,36 +131,34 @@ jobs:
           for /f %%c in ('mysql -u root -p%CI_MYSQL_ROOT_PASS% -N -B -e "USE %CI_DB_NAME%; SHOW TABLES;" ^| find /c /v ""') do set "TBL=%%c"
           echo Tables count: %TBL%
           if %TBL% LSS 5 (
-            echo ::error::Database chỉ có %TBL% bảng (mong đợi ^>=5)
+            echo ::error::Database has only %TBL% tables (expected ^>=5)
             exit /b 1
           )
-          echo ✓ Database co %TBL% bang
+          echo OK Database has %TBL% tables
 
       - name: Smoke test backend dev server
         shell: powershell
         run: |
-          # Khởi động backend ngắn để verify nó start được
           $proc = Start-Process -FilePath "cmd" -ArgumentList "/c npm run dev" -WorkingDirectory "backend" -PassThru -RedirectStandardOutput "backend-out.log" -RedirectStandardError "backend-err.log"
           Start-Sleep -Seconds 15
           try {
             $resp = Invoke-WebRequest -Uri "http://localhost:3001/api/health" -UseBasicParsing -TimeoutSec 5
             if ($resp.StatusCode -ne 200) {
-              Write-Error "/api/health trả status $($resp.StatusCode)"
+              Write-Error ("/api/health returned status " + $resp.StatusCode)
               Get-Content backend-out.log
               Get-Content backend-err.log
               exit 1
             }
-            Write-Host "✓ /api/health responded with 200"
+            Write-Host "OK /api/health responded with 200"
 
-            # Test login
             $body = @{ username = "admin"; password = $env:CI_ADMIN_PASS } | ConvertTo-Json
             $login = Invoke-WebRequest -Uri "http://localhost:3001/api/auth/login" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5
             if ($login.Content -notmatch "token") {
-              Write-Error "Login không trả token"
+              Write-Error "Login did not return token"
               Write-Host $login.Content
               exit 1
             }
-            Write-Host "✓ Login admin thành công"
+            Write-Host "OK admin login succeeded"
           } catch {
             Write-Host "Backend stdout:"
             Get-Content backend-out.log -ErrorAction SilentlyContinue
@@ -171,7 +166,6 @@ jobs:
             Get-Content backend-err.log -ErrorAction SilentlyContinue
             throw
           } finally {
-            # Kill backend dev server (bao gồm child processes)
             taskkill /F /T /PID $proc.Id 2>$null
             Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
