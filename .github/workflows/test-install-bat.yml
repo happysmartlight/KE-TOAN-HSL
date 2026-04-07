@@ -40,10 +40,17 @@ jobs:
         run: |
           choco install mariadb -y --no-progress
           Start-Sleep -Seconds 5
-          $svc = Get-Service -Name 'MariaDB' -ErrorAction SilentlyContinue
-          if (-not $svc) { Write-Error "MariaDB service not found"; exit 1 }
-          if ($svc.Status -ne 'Running') { Start-Service MariaDB }
-          Write-Host ("MariaDB service status: " + (Get-Service MariaDB).Status)
+          # Service name varies by version (MariaDB, MySQL, mariadb-12.2, ...)
+          $svc = Get-Service | Where-Object { $_.Name -match '^(MariaDB|MySQL|mariadb)' } | Select-Object -First 1
+          if (-not $svc) {
+            Write-Host "All services matching maria/mysql:"
+            Get-Service | Where-Object { $_.Name -match 'maria|mysql' } | Format-Table -AutoSize
+            Write-Error "MariaDB service not found"
+            exit 1
+          }
+          Write-Host ("Found service: " + $svc.Name + " status=" + $svc.Status)
+          if ($svc.Status -ne 'Running') { Start-Service $svc.Name }
+          Write-Host ("MariaDB service status: " + (Get-Service $svc.Name).Status)
 
       - name: Add MariaDB bin to PATH
         shell: powershell
