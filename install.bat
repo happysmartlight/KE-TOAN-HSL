@@ -107,9 +107,9 @@ if "%ADMIN_PASS%"=="" (
   echo [!] Bo qua - ban se phai tu set INITIAL_ADMIN_PASSWORD trong .env truoc khi dang nhap.
 )
 
-REM ── 4c. Sinh JWT_SECRET bang PowerShell ────────────────────
+REM ── 4c. Sinh JWT_SECRET bang PowerShell (2 GUID = 64 hex chars, khong dung pipe de tranh loi escape) ──
 set "JWT_SECRET="
-for /f "delims=" %%j in ('powershell -NoProfile -Command "-join ((1..64) ^| ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })"') do set "JWT_SECRET=%%j"
+for /f "delims=" %%j in ('powershell -NoProfile -Command "([Guid]::NewGuid().ToString('N') + [Guid]::NewGuid().ToString('N'))"') do set "JWT_SECRET=%%j"
 if "%JWT_SECRET%"=="" (
   echo [X] Khong sinh duoc JWT_SECRET. PowerShell co san khong?
   pause & exit /b 1
