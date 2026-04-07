@@ -382,7 +382,41 @@ You MUST respond in structured steps:
 - **Light tracer**: thêm ghost `Area`/`Line` trùng dataKey, `fill="none"`, `strokeDasharray="10 2000"`, `isAnimationActive={false}`, `legendType="none"`, `className="tracer-{color}"` → CSS `animation: lineTrace linear infinite` trên `.tracer-* .recharts-area-curve / .recharts-line-curve`
   - Tốc độ khác nhau để tránh đồng bộ: green=4s, cyan=5.5s delay 1s, purple=3.5s
 - **Bar chart hover**: `<Tooltip cursor={{ fill: 'rgba(0,245,255,0.04)' }}>` thay cursor trắng; `activeBar={<Rectangle style={{ filter: 'drop-shadow(...)' }}>}` với màu đúng từng cột
-- CSS keyframes: `chartDotPulse`, `lineTrace` trong `index.css`
+- CSS keyframes: `chartDotPulse`, `lineTrace`, `moneyFloat` trong `index.css`
+
+### Dashboard — Floating Symbol Background (chart decorative layer)
+Lớp nền ký hiệu bay lên phía sau chart — thể hiện chủ đề của chart (tiền tăng trưởng, khách hàng mới...).
+
+**Cấu trúc:**
+- Div wrapper `.money-flow` hoặc `.growth-flow` đặt **ngay trong `.card`** (trước `.card-title`)
+  - `position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0`
+  - Thuộc tính `aria-hidden="true"` (screen reader bỏ qua)
+- Mỗi ký hiệu là `<span>` với inline style: `left`, `fontSize`, `animationDuration`, `animationDelay`
+- Class `.card-title` và `.recharts-responsive-container` có `z-index:2 / 1` → chart luôn nổi trên lớp nền
+
+**Keyframe `moneyFloat`** (dùng chung cho mọi lớp flow):
+- Bay từ `bottom:-20px` lên `translateY(-240px)`, xoay nhẹ 8°, scale 0.8 → 1.1
+- Fade: 0% opacity → 55% → 45% → 25% → 0
+- `linear infinite`
+
+**Biến thể màu (mapping theo màu đường chart):**
+
+| Class | Chart | Màu chính | Màu phụ | Ký hiệu |
+|---|---|---|---|---|
+| `.money-flow` | 📈 Doanh thu & Lợi nhuận | `#00ff88` (xanh lá = doanh thu) | `.cyan` → `#00f5ff` (lợi nhuận) | `$` + `VNĐ` |
+| `.growth-flow` | 👥 Tăng trưởng khách hàng | `#bf00ff` (tím = tổng KH) | `.yellow` → `#ffcc00` (KH mới) | `+1`, `★` + `NEW` |
+
+**Quy ước tham số cho 11 spans mỗi chart:**
+- `left`: rải đều 5% → 90% ngang (tránh clustering)
+- `fontSize`: 10-16px (nhỏ = xa, lớn = gần → cảm giác chiều sâu)
+- `animationDuration`: 8-13s, **mỗi span một giá trị khác** để tránh đồng bộ cứng
+- `animationDelay`: 0-8s lệch pha → dòng ký hiệu xuất hiện liên tục
+- Mix 2 màu xen kẽ theo tỉ lệ ~1:1
+
+**Thêm biến thể mới:**
+1. Thêm class `.xxx-flow` trong `index.css` (reuse keyframe `moneyFloat`)
+2. Định nghĩa 2 màu + text-shadow glow matching màu chart
+3. Chèn `<div className="xxx-flow" aria-hidden="true">` **trước** `.card-title` trong chart card
 
 ### Dashboard — Top Khách hàng Clickable
 - Click vào bất kỳ row trong "🏆 Top khách hàng" → fetch `GET /customers/:id` → mở HoloCard popup

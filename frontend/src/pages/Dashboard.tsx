@@ -15,7 +15,7 @@ const fmtK = (n: number) => n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + 'M' : 
 const PIE_COLORS = ['#00f5ff','#bf00ff','#00ff88','#ffcc00','#ff0055','#ff8c00'];
 
 // isMoney: các dataKey dùng tiền — còn lại (total, new) là số đếm người
-const MONEY_KEYS = new Set(['revenue','profit','income','expense']);
+const MONEY_KEYS = new Set(['revenue','profit','income','expense','purchase','sales']);
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
@@ -151,7 +151,14 @@ export default function Dashboard() {
     </div>
   );
 
-  const { kpis, monthlyRevenue, cashflowByCategory, customerGrowth, topProducts, topCustomers, topStaff } = data;
+  const { kpis, monthlyRevenue, cashflowByCategory, customerGrowth, topProducts, topCustomers, topStaff, topDebtors = [], topCreditors = [] } = data;
+
+  // Trade chart data: nhập (purchase) vs bán (sales = revenue)
+  const monthlyTrade = monthlyRevenue.map((m: any) => ({
+    month: m.month,
+    purchase: m.purchase || 0,
+    sales:    m.revenue  || 0,
+  }));
 
   const RANK_DISPLAY = [
     { icon: '🥇', color: '#FFD700', bg: 'rgba(255,215,0,0.10)', border: 'rgba(255,215,0,0.30)' },
@@ -194,10 +201,170 @@ export default function Dashboard() {
         <KpiCard label="Phải thu" value={fmt(kpis.receivable)} color="var(--green)" sub={`Phải trả: ${fmt(kpis.payable)}`} index={7} />
       </div>
 
+      {/* ── Trade & Debt row: Purchase vs Sales chart + Debt panel ── */}
+      <div className="grid-2 mb-16">
+        {/* Nhập hàng vs Xuất bán dual line chart */}
+        <div className="card">
+          {/* Floating trade symbols — decorative background */}
+          <div className="trade-flow" aria-hidden="true">
+            <span style={{ left: '6%',  fontSize: 14, animationDuration: '9s',   animationDelay: '0s'    }}>📦</span>
+            <span style={{ left: '17%', fontSize: 11, animationDuration: '11s',  animationDelay: '2.3s'  }} className="orange">IN</span>
+            <span style={{ left: '29%', fontSize: 13, animationDuration: '8s',   animationDelay: '4.6s'  }}>📦</span>
+            <span style={{ left: '41%', fontSize: 10, animationDuration: '12s',  animationDelay: '1.1s'  }} className="orange">OUT</span>
+            <span style={{ left: '53%', fontSize: 15, animationDuration: '10s',  animationDelay: '6s'    }}>📦</span>
+            <span style={{ left: '65%', fontSize: 12, animationDuration: '9.5s', animationDelay: '3.3s'  }} className="orange">IN</span>
+            <span style={{ left: '77%', fontSize: 14, animationDuration: '11s',  animationDelay: '5.5s'  }}>📦</span>
+            <span style={{ left: '89%', fontSize: 11, animationDuration: '8.5s', animationDelay: '0.8s'  }} className="orange">OUT</span>
+            <span style={{ left: '11%', fontSize: 12, animationDuration: '13s',  animationDelay: '7.1s'  }} className="orange">IN</span>
+            <span style={{ left: '47%', fontSize: 14, animationDuration: '10.5s',animationDelay: '8.3s'  }}>📦</span>
+            <span style={{ left: '73%', fontSize: 10, animationDuration: '12.5s',animationDelay: '2.8s'  }} className="orange">OUT</span>
+          </div>
+          <div className="card-title" style={{ color: '#ff8c00' }}>📦 Nhập hàng &amp; Xuất bán {year}</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={monthlyTrade} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <XAxis dataKey="month" tick={{ fill:'#6a6a90', fontSize:10 }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={fmtK} tick={{ fill:'#6a6a90', fontSize:9 }} axisLine={false} tickLine={false} width={40} />
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,140,0,0.2)', strokeWidth: 1, strokeDasharray: '4 3' }} />
+              <Legend iconSize={8} wrapperStyle={{ fontSize:10, color:'#9898b8' }} />
+              {/* Base lines */}
+              <Line type="monotone" dataKey="purchase" name="Nhập hàng" stroke="#ff8c00" strokeWidth={2}
+                dot={<GlowDot />} activeDot={<GlowActiveDot />} animationDuration={1800} animationEasing="ease-out" />
+              <Line type="monotone" dataKey="sales"    name="Xuất bán"  stroke="#00ff88" strokeWidth={2}
+                dot={<GlowDot />} activeDot={<GlowActiveDot />} animationDuration={2200} animationEasing="ease-out" />
+              {/* Light tracers */}
+              <Line type="monotone" dataKey="purchase" stroke="#ff8c00" strokeWidth={3} fill="none"
+                strokeDasharray="10 2000" isAnimationActive={false} dot={false} legendType="none"
+                className="tracer-orange" strokeOpacity={0.9} />
+              <Line type="monotone" dataKey="sales" stroke="#00ff88" strokeWidth={3} fill="none"
+                strokeDasharray="10 2000" isAnimationActive={false} dot={false} legendType="none"
+                className="tracer-green" strokeOpacity={0.9} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Công nợ — Phải thu vs Phải trả */}
+        <div className="card">
+          <div className="card-title c-yellow">⚖️ Công nợ — Phải thu vs Phải trả</div>
+          {(() => {
+            const receivable = kpis.receivable || 0;
+            const payable    = kpis.payable    || 0;
+            const max        = Math.max(receivable, payable, 1);
+            const net        = receivable - payable;
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                {/* Receivable bar */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                    <span style={{ color: '#00ff88', fontWeight: 700 }}>↘ Phải thu (KH nợ mình)</span>
+                    <span style={{ color: 'var(--text-bright)', fontWeight: 700 }}>{fmt(receivable)}</span>
+                  </div>
+                  <div style={{ height: 10, background: 'rgba(255,255,255,0.04)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', width: `${(receivable / max) * 100}%`,
+                      background: 'linear-gradient(90deg, #00ff88, #00ffaa)',
+                      boxShadow: '0 0 8px #00ff88, 0 0 16px rgba(0,255,136,0.4)',
+                      borderRadius: 3, transition: 'width 0.6s ease',
+                    }} />
+                  </div>
+                  {topDebtors.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {topDebtors.slice(0, 3).map((d: any) => (
+                        <div key={d.id}
+                          onClick={() => openCustomer(d.id)}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            fontSize: 10, padding: '3px 6px', borderRadius: 3,
+                            background: 'rgba(0,255,136,0.04)',
+                            border: '1px solid rgba(0,255,136,0.12)',
+                            cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(0,255,136,0.10)';
+                            e.currentTarget.style.borderColor = 'rgba(0,255,136,0.30)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(0,255,136,0.04)';
+                            e.currentTarget.style.borderColor = 'rgba(0,255,136,0.12)';
+                          }}>
+                          <span style={{ color: 'var(--text-bright)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+                          <span style={{ color: '#00ff88', fontWeight: 700, flexShrink: 0, marginLeft: 6 }}>{fmt(d.debt)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Payable bar */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                    <span style={{ color: '#ff0055', fontWeight: 700 }}>↗ Phải trả (mình nợ NCC)</span>
+                    <span style={{ color: 'var(--text-bright)', fontWeight: 700 }}>{fmt(payable)}</span>
+                  </div>
+                  <div style={{ height: 10, background: 'rgba(255,255,255,0.04)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', width: `${(payable / max) * 100}%`,
+                      background: 'linear-gradient(90deg, #ff0055, #ff3377)',
+                      boxShadow: '0 0 8px #ff0055, 0 0 16px rgba(255,0,85,0.4)',
+                      borderRadius: 3, transition: 'width 0.6s ease',
+                    }} />
+                  </div>
+                  {topCreditors.length > 0 && (
+                    <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {topCreditors.slice(0, 3).map((c: any) => (
+                        <div key={c.id}
+                          style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            fontSize: 10, padding: '3px 6px', borderRadius: 3,
+                            background: 'rgba(255,0,85,0.04)',
+                            border: '1px solid rgba(255,0,85,0.12)',
+                          }}>
+                          <span style={{ color: 'var(--text-bright)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                          <span style={{ color: '#ff0055', fontWeight: 700, flexShrink: 0, marginLeft: 6 }}>{fmt(c.debt)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Net balance indicator */}
+                <div style={{
+                  marginTop: 4, padding: '8px 10px', borderRadius: 4,
+                  background: net >= 0 ? 'rgba(0,255,136,0.06)' : 'rgba(255,0,85,0.06)',
+                  border: `1px solid ${net >= 0 ? 'rgba(0,255,136,0.25)' : 'rgba(255,0,85,0.25)'}`,
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+                    {net >= 0 ? '✓ Thu ròng (lợi)' : '⚠ Trả ròng (bất lợi)'}
+                  </span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: net >= 0 ? '#00ff88' : '#ff0055' }}>
+                    {net >= 0 ? '+' : ''}{fmt(net)}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
       {/* ── Charts row 1: Revenue trend + Customer growth + Top customers ── */}
       <div className="grid-3 mb-16">
         {/* Revenue / Profit area chart */}
         <div className="card">
+          {/* Floating money symbols — decorative background */}
+          <div className="money-flow" aria-hidden="true">
+            <span style={{ left: '6%',  fontSize: 14, animationDuration: '9s',  animationDelay: '0s'    }}>$</span>
+            <span style={{ left: '18%', fontSize: 11, animationDuration: '11s', animationDelay: '2.2s'  }} className="cyan">VNĐ</span>
+            <span style={{ left: '30%', fontSize: 16, animationDuration: '8s',  animationDelay: '4.5s'  }}>$</span>
+            <span style={{ left: '42%', fontSize: 10, animationDuration: '12s', animationDelay: '1.1s'  }} className="cyan">VNĐ</span>
+            <span style={{ left: '55%', fontSize: 13, animationDuration: '10s', animationDelay: '6s'    }}>$</span>
+            <span style={{ left: '68%', fontSize: 12, animationDuration: '9.5s',animationDelay: '3.3s'  }} className="cyan">VNĐ</span>
+            <span style={{ left: '80%', fontSize: 15, animationDuration: '11s', animationDelay: '5.5s'  }}>$</span>
+            <span style={{ left: '90%', fontSize: 11, animationDuration: '8.5s',animationDelay: '0.8s'  }} className="cyan">VNĐ</span>
+            <span style={{ left: '12%', fontSize: 12, animationDuration: '13s', animationDelay: '7s'    }} className="cyan">VNĐ</span>
+            <span style={{ left: '48%', fontSize: 14, animationDuration: '10.5s',animationDelay:'8.2s'  }}>$</span>
+            <span style={{ left: '74%', fontSize: 10, animationDuration: '12.5s',animationDelay:'2.8s'  }} className="cyan">VNĐ</span>
+          </div>
           <div className="card-title c-cyan">📈 Doanh thu &amp; Lợi nhuận {year}</div>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={monthlyRevenue} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
@@ -233,6 +400,20 @@ export default function Dashboard() {
 
         {/* Customer growth line chart */}
         <div className="card">
+          {/* Floating growth symbols — decorative background */}
+          <div className="growth-flow" aria-hidden="true">
+            <span style={{ left: '5%',  fontSize: 14, animationDuration: '9s',   animationDelay: '0s'    }}>+1</span>
+            <span style={{ left: '16%', fontSize: 11, animationDuration: '11s',  animationDelay: '2.4s'  }} className="yellow">NEW</span>
+            <span style={{ left: '28%', fontSize: 13, animationDuration: '8s',   animationDelay: '4.8s'  }}>★</span>
+            <span style={{ left: '40%', fontSize: 10, animationDuration: '12s',  animationDelay: '1.2s'  }} className="yellow">NEW</span>
+            <span style={{ left: '52%', fontSize: 15, animationDuration: '10s',  animationDelay: '6.1s'  }}>+1</span>
+            <span style={{ left: '64%', fontSize: 12, animationDuration: '9.5s', animationDelay: '3.4s'  }} className="yellow">NEW</span>
+            <span style={{ left: '76%', fontSize: 14, animationDuration: '11s',  animationDelay: '5.7s'  }}>★</span>
+            <span style={{ left: '88%', fontSize: 11, animationDuration: '8.5s', animationDelay: '0.9s'  }} className="yellow">NEW</span>
+            <span style={{ left: '10%', fontSize: 12, animationDuration: '13s',  animationDelay: '7.3s'  }} className="yellow">NEW</span>
+            <span style={{ left: '46%', fontSize: 14, animationDuration: '10.5s',animationDelay: '8.4s'  }}>+1</span>
+            <span style={{ left: '72%', fontSize: 10, animationDuration: '12.5s',animationDelay: '2.9s'  }}>★</span>
+          </div>
           <div className="card-title c-purple">👥 Tăng trưởng khách hàng {year}</div>
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={customerGrowth} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>

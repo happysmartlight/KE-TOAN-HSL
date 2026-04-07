@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import SearchSelect from '../components/SearchSelect';
 import FilterBar, { defaultFilter } from '../components/FilterBar';
 import type { FilterState } from '../components/FilterBar';
+import ConfirmModal from '../components/ConfirmModal';
 
 const fmt = (n: number) => n.toLocaleString('vi-VN') + ' ₫';
 
@@ -22,8 +23,15 @@ export default function Purchases() {
   const [note, setNote]           = useState('');
   const [items, setItems]         = useState([{ productId: '', quantity: 1, costPrice: 0 }]);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
+  const [payModal, setPayModal]   = useState<any>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [confirmCancel, setConfirmCancel] = useState<any>(null);
 
-  useEscKey(open ? () => setOpen(false) : null);
+  useEscKey(
+    payModal       ? () => { setPayModal(null); setPayAmount(''); } :
+    confirmCancel  ? () => setConfirmCancel(null) :
+    open           ? () => setOpen(false) : null
+  );
 
   const [loading, setLoading] = useState(true);
   const load = () => api.get('/purchases').then((r) => { setRows(r.data); setLoading(false); });
@@ -72,15 +80,24 @@ export default function Purchases() {
     return r;
   }, [rows, filter]);
 
-  const handleCancel = async (po: any) => {
-    const msg = po.paidAmount > 0
-      ? `Hủy đơn nhập "${po.code}"?\n⚠️ Đã trả ${fmt(po.paidAmount)} — phần này cần xử lý thủ công.`
-      : `Hủy đơn nhập "${po.code}"?`;
-    if (!confirm(msg)) return;
+  const doCancel = async (po: any) => {
     try {
       await api.patch(`/purchases/${po.id}/cancel`);
+      setConfirmCancel(null);
       load();
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi khi hủy'); }
+  };
+
+  const submitPayment = async () => {
+    try {
+      await api.post('/purchases/supplier-payments', {
+        purchaseOrderId: payModal.id,
+        amount: Number(payAmount),
+      });
+      setPayModal(null); setPayAmount('');
+      toast.success('Đã thanh toán');
+      load();
+    } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
   return (
@@ -174,12 +191,23 @@ export default function Purchases() {
 
       <div className="table-wrap">
         <table className="nt">
-          <thead><tr><th>Mã đơn</th><th>Nhà cung cấp</th><th>Tổng tiền</th><th>Trạng thái</th><th>Ngày tạo</th><th></th></tr></thead>
+          <thead><tr>
+            <th>Mã đơn</th>
+            <th>Nhà cung cấp</th>
+            <th>Tổng tiền</th>
+            <th>Đã trả</th>
+            <th>Còn lại</th>
+            <th>Trạng thái</th>
+            <th>Ngày tạo</th>
+            <th></th>
+          </tr></thead>
           <tbody>
             {loading ? Array.from({ length: 4 }).map((_, i) => (
               <tr key={i} className="skeleton-row">
                 <td><div className="skeleton w-sm"></div></td>
                 <td><div className="skeleton w-md"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
+                <td><div className="skeleton w-sm"></div></td>
                 <td><div className="skeleton w-sm"></div></td>
                 <td><div className="skeleton w-xs"></div></td>
                 <td><div className="skeleton w-xs"></div></td>
@@ -187,27 +215,40 @@ export default function Purchases() {
               </tr>
             )) : <>
             {filtered.length === 0 && (
-              <tr className="empty-row"><td colSpan={6}>
+              <tr className="empty-row"><td colSpan={8}>
                 <EmptyState icon="🛒" title={rows.length === 0 ? 'Chưa có đơn nhập hàng' : 'Không tìm thấy kết quả'}
                   description={rows.length === 0 ? 'Tạo đơn nhập hàng đầu tiên.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'} />
               </td></tr>
             )}
             {filtered.map((p) => {
               const isCancelled = p.status === 'cancelled';
+              const paid      = p.paidAmount || 0;
+              const remaining = p.totalAmount - paid;
+              const statusCls =
+                p.status === 'paid'      ? 'green'  :
+                p.status === 'partial'   ? 'yellow' :
+                p.status === 'cancelled' ? 'red'    : 'purple';
+              const statusLbl =
+                p.status === 'paid'      ? 'Đã TT'     :
+                p.status === 'partial'   ? 'Một phần'  :
+                p.status === 'cancelled' ? 'Đã hủy'    : 'Chưa TT';
               return (
               <tr key={p.id} style={isCancelled ? { opacity: 0.5 } : {}}>
                 <td className="c-cyan">{p.code}</td>
                 <td className="c-bright">{p.supplier?.name}</td>
                 <td>{fmt(p.totalAmount)}</td>
-                <td><span className={`tag ${p.status === 'paid' ? 'green' : p.status === 'partial' ? 'yellow' : p.status === 'cancelled' ? 'red' : 'red'}`}>
-                  {p.status === 'paid' ? 'Đã TT' : p.status === 'partial' ? 'Một phần' : p.status === 'cancelled' ? 'Đã hủy' : 'Chưa TT'}
-                </span></td>
+                <td className="c-green">{fmt(paid)}</td>
+                <td className={`fw7 ${remaining > 0 && !isCancelled ? 'c-red' : 'c-dim'}`}>{fmt(remaining)}</td>
+                <td><span className={`tag ${statusCls}`}>{statusLbl}</span></td>
                 <td className="c-dim">{new Date(p.createdAt).toLocaleDateString('vi-VN')}</td>
-                <td>
-                  {isAdmin && !isCancelled && (
-                    <button className="btn red btn-sm" onClick={() => handleCancel(p)}>Hủy</button>
+                <td><div className="td-act">
+                  {!isCancelled && p.status !== 'paid' && (
+                    <button className="btn green btn-sm" onClick={() => { setPayModal(p); setPayAmount(String(remaining)); }}>Trả tiền</button>
                   )}
-                </td>
+                  {isAdmin && !isCancelled && (
+                    <button className="btn red btn-sm" onClick={() => setConfirmCancel(p)}>Hủy</button>
+                  )}
+                </div></td>
               </tr>
               );
             })}
@@ -215,6 +256,51 @@ export default function Purchases() {
           </tbody>
         </table>
       </div>
+
+      {/* ── Thanh toán modal ── */}
+      {payModal && (
+        <div className="modal-bg">
+          <div className="modal">
+            <div className="modal-title">◈ Trả tiền — {payModal.code}</div>
+            <div className="report-row" style={{ marginBottom: 6 }}>
+              <span className="lbl-r">Nhà cung cấp</span>
+              <span className="c-bright">{payModal.supplier?.name}</span>
+            </div>
+            <div className="report-row" style={{ marginBottom: 6 }}>
+              <span className="lbl-r">Tổng đơn</span>
+              <span className="c-bright">{fmt(payModal.totalAmount)}</span>
+            </div>
+            <div className="report-row" style={{ marginBottom: 6 }}>
+              <span className="lbl-r">Đã trả</span>
+              <span className="c-green">{fmt(payModal.paidAmount || 0)}</span>
+            </div>
+            <div className="report-row" style={{ marginBottom: 14 }}>
+              <span className="lbl-r">Còn nợ</span>
+              <span className="c-red fw7">{fmt(payModal.totalAmount - (payModal.paidAmount || 0))}</span>
+            </div>
+            <label className="lbl">Số tiền trả</label>
+            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
+            <div className="form-actions">
+              <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
+              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); }}>[ Hủy ]</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Confirm cancel modal ── */}
+      {confirmCancel && (
+        <ConfirmModal
+          title={`Hủy đơn nhập ${confirmCancel.code}`}
+          message={`Đơn nhập sẽ chuyển sang trạng thái "Đã hủy". Tồn kho và công nợ NCC sẽ được hoàn lại tự động.`}
+          warning={confirmCancel.paidAmount > 0
+            ? `Đơn đã trả ${fmt(confirmCancel.paidAmount)} — phần tiền này cần xử lý hoàn trả thủ công.`
+            : undefined}
+          confirmLabel="Xác nhận hủy"
+          onConfirm={() => doCancel(confirmCancel)}
+          onCancel={() => setConfirmCancel(null)}
+        />
+      )}
     </div>
   );
 }

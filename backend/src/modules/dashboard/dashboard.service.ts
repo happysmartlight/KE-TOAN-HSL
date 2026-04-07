@@ -24,6 +24,14 @@ export const dashboardService = {
       include: { items: { include: { product: true } } },
     });
 
+    // ── 2b. Purchase orders — filter theo createdAt (ngày nhập kho thực tế) ──
+    const allPurchases = await prisma.purchaseOrder.findMany({
+      where: {
+        createdAt: dateRange,
+        status: { not: 'cancelled' },
+      },
+    });
+
     // ── 3. Monthly breakdown ──
     const monthlyRevenue = Array.from({ length: 12 }, (_, i) => {
       const m = i + 1;
@@ -37,12 +45,16 @@ export const dashboardService = {
       // Cashflow: dùng date field
       const cf = allCashflow.filter((c) => new Date(c.date).getMonth() + 1 === m);
 
+      // Purchase: dùng createdAt (ngày nhập kho)
+      const po = allPurchases.filter((p) => new Date(p.createdAt).getMonth() + 1 === m);
+
       const revenue = inv.reduce((s, v) => s + v.totalAmount, 0);
       const cogs    = inv.reduce((s, v) => s + v.items.reduce((si, it) => si + it.product.costPrice * it.quantity, 0), 0);
       const income  = cf.filter((c) => c.type === 'income').reduce((s, c) => s + c.amount, 0);
       const expense = cf.filter((c) => c.type === 'expense').reduce((s, c) => s + c.amount, 0);
+      const purchase = po.reduce((s, p) => s + p.totalAmount, 0);
 
-      return { month: `T${m}`, revenue, profit: revenue - cogs, income, expense };
+      return { month: `T${m}`, revenue, profit: revenue - cogs, income, expense, purchase };
     });
 
     // ── 4. Cashflow by category (current year) ──
@@ -54,7 +66,8 @@ export const dashboardService = {
     }
     const categoryLabels: Record<string, string> = {
       sales: 'Doanh thu', payment_received: 'Thu tiền HĐ',
-      purchase: 'Nhập hàng', salary: 'Lương', other: 'Khác',
+      purchase: 'Nhập hàng (legacy)', supplier_payment: 'Trả NCC',
+      salary: 'Lương', operations: 'Vận hành', other: 'Khác',
     };
     const cashflowByCategory = Object.entries(categoryMap).map(([key, val]) => ({
       name: categoryLabels[key] || key,
@@ -174,6 +187,7 @@ export const dashboardService = {
         totalRevenue: revenueMap[u.id]?.revenue ?? 0,
         invoiceCount: revenueMap[u.id]?.count ?? 0,
       }))
+      .filter((u) => u.totalRevenue > 0)
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, 3);
 
@@ -187,6 +201,20 @@ export const dashboardService = {
     const customerDebt = await prisma.customer.aggregate({ _sum: { debt: true } });
     const supplierDebt = await prisma.supplier.aggregate({ _sum: { debt: true } });
     const pendingDeleteRequests = await prisma.deleteRequest.count({ where: { status: 'pending' } });
+
+    // ── 10. Top debtors / creditors (công nợ snapshot — không lọc theo year) ──
+    const topDebtors = await prisma.customer.findMany({
+      where: { status: 'active', debt: { gt: 0 } },
+      orderBy: { debt: 'desc' },
+      take: 5,
+      select: { id: true, name: true, companyName: true, debt: true },
+    });
+    const topCreditors = await prisma.supplier.findMany({
+      where: { status: 'active', debt: { gt: 0 } },
+      orderBy: { debt: 'desc' },
+      take: 5,
+      select: { id: true, name: true, debt: true },
+    });
 
     return {
       year,
@@ -208,6 +236,8 @@ export const dashboardService = {
       topProducts,
       topCustomers,
       topStaff,
+      topDebtors,
+      topCreditors,
     };
   },
 };

@@ -126,17 +126,18 @@ model Payment {
 }
 
 model PurchaseOrder {
-  id          Int            @id @default(autoincrement())
-  code        String         @unique // VD: PO-2024-001
+  id          Int               @id @default(autoincrement())
+  code        String            @unique // VD: PO-2024-001
   supplierId  Int
-  supplier    Supplier       @relation(fields: [supplierId], references: [id])
-  totalAmount Float          @default(0)
-  paidAmount  Float          @default(0)
-  status      String         @default("unpaid") // unpaid | partial | paid
-  note        String?        @db.Text
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  supplier    Supplier          @relation(fields: [supplierId], references: [id])
+  totalAmount Float             @default(0)
+  paidAmount  Float             @default(0)
+  status      String            @default("unpaid") // unpaid | partial | paid | cancelled
+  note        String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
   items       PurchaseItem[]
+  payments    SupplierPayment[]
 }
 
 model PurchaseItem {
@@ -163,13 +164,15 @@ model Cashflow {
 }
 
 model SupplierPayment {
-  id         Int      @id @default(autoincrement())
-  supplierId Int
-  supplier   Supplier @relation(fields: [supplierId], references: [id])
-  amount     Float
-  method     String   @default("cash") // cash | transfer
-  note       String?  @db.Text
-  createdAt  DateTime @default(now())
+  id              Int             @id @default(autoincrement())
+  purchaseOrderId Int?            // Nếu null = trả công nợ tổng quát (không gắn PO)
+  purchaseOrder   PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
+  supplierId      Int
+  supplier        Supplier        @relation(fields: [supplierId], references: [id])
+  amount          Float
+  method          String          @default("cash") // cash | transfer
+  note            String?         @db.Text
+  createdAt       DateTime        @default(now())
 }
 
 model InventoryLog {

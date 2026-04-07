@@ -73,21 +73,11 @@ export const purchaseService = {
       }
 
       // Tăng công nợ nhà cung cấp
+      // (KHÔNG tạo cashflow ở đây — chi phí thực tế chỉ phát sinh khi trả tiền NCC.
+      //  Logic cũ tạo cashflow ở cả create + supplier-payment → double count.)
       await tx.supplier.update({
         where: { id: supplierId },
         data: { debt: { increment: totalAmount } },
-      });
-
-      // Ghi cashflow (chi phí nhập hàng)
-      await tx.cashflow.create({
-        data: {
-          type: 'expense',
-          category: 'purchase',
-          amount: totalAmount,
-          description: `Nhập hàng đơn ${code}`,
-          refId: newPurchase.id,
-          refType: 'purchase',
-        },
       });
 
       return newPurchase;
@@ -134,10 +124,12 @@ export const purchaseService = {
         });
       }
 
-      // Xóa bút toán cashflow gốc
+      // Dọn cashflow cũ (legacy data có thể có refType 'purchase' — fix bug double-count)
       await tx.cashflow.deleteMany({
         where: { refId: id, refType: 'purchase' },
       });
+      // LƯU Ý: cashflow của supplier_payment (tiền đã trả) KHÔNG xóa
+      // — tiền đã ra khỏi quỹ thật, user phải tự đòi NCC hoàn lại (có warning ở modal hủy)
     });
   },
 };

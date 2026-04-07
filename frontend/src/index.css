@@ -322,14 +322,64 @@ html,body,#root{
   background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0.3;
 }
 
+.grid-6{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
 .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
 .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
 .mb-16{margin-bottom:16px}
 .mb-12{margin-bottom:12px}
 
-.card-title{font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:12px}
+.card-title{font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:12px;position:relative;z-index:2}
 .empty-chart{height:180px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px}
+
+/* ── Floating decorative symbols (chart backgrounds) ── */
+.money-flow,.growth-flow,.trade-flow{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0;
+}
+.money-flow span,.growth-flow span,.trade-flow span{
+  position:absolute;bottom:-20px;
+  font-family:'JetBrains Mono',monospace;font-weight:700;
+  opacity:0;
+  animation:moneyFloat linear infinite;
+  will-change:transform,opacity;
+}
+/* Revenue chart — green $ + cyan VNĐ */
+.money-flow span{
+  color:#00ff88;
+  text-shadow:0 0 8px rgba(0,255,136,0.5),0 0 16px rgba(0,255,136,0.25);
+}
+.money-flow span.cyan{
+  color:#00f5ff;
+  text-shadow:0 0 8px rgba(0,245,255,0.5),0 0 16px rgba(0,245,255,0.25);
+}
+/* Customer growth chart — purple +1 / ★ + yellow NEW */
+.growth-flow span{
+  color:#bf00ff;
+  text-shadow:0 0 8px rgba(191,0,255,0.5),0 0 16px rgba(191,0,255,0.25);
+}
+.growth-flow span.yellow{
+  color:#ffcc00;
+  text-shadow:0 0 8px rgba(255,204,0,0.5),0 0 16px rgba(255,204,0,0.25);
+}
+/* Trade chart — orange 📦 + orange IN/OUT */
+.trade-flow span{
+  color:#ff8c00;
+  text-shadow:0 0 8px rgba(255,140,0,0.5),0 0 16px rgba(255,140,0,0.25);
+}
+.trade-flow span.orange{
+  color:#ffa64d;
+  text-shadow:0 0 8px rgba(255,166,77,0.5),0 0 16px rgba(255,166,77,0.25);
+}
+@keyframes moneyFloat{
+  0%   { transform:translateY(0) rotate(0deg) scale(0.8); opacity:0 }
+  12%  { opacity:0.55 }
+  50%  { opacity:0.45 }
+  88%  { opacity:0.25 }
+  100% { transform:translateY(-240px) rotate(8deg) scale(1.1); opacity:0 }
+}
+/* Ensure chart sits above floating background */
+.card .recharts-responsive-container{position:relative;z-index:1}
 
 /* stat card */
 .stat-card{
@@ -585,6 +635,8 @@ select.inp option{background:var(--bg-card);color:var(--text)}
   .main-content { width:100% }
 
   /* Grid collapses */
+  .grid-6 { grid-template-columns:repeat(3,1fr) }
+  .grid-5 { grid-template-columns:repeat(2,1fr) }
   .grid-4 { grid-template-columns:repeat(2,1fr) }
   .grid-3 { grid-template-columns:repeat(2,1fr) }
   .grid-2 { grid-template-columns:1fr }
@@ -609,6 +661,8 @@ select.inp option{background:var(--bg-card);color:var(--text)}
 }
 
 @media (max-width: 480px) {
+  .grid-6 { grid-template-columns:1fr 1fr }
+  .grid-5 { grid-template-columns:1fr 1fr }
   .grid-4 { grid-template-columns:1fr 1fr }
   .grid-3 { grid-template-columns:1fr }
   .topbar { padding:0 10px }
@@ -866,6 +920,8 @@ select.inp.inp-ok {
 .tracer-green  .recharts-area-curve  { animation: lineTrace 4s   linear infinite; }
 .tracer-cyan   .recharts-area-curve  { animation: lineTrace 5.5s linear 1s infinite; }
 .tracer-purple .recharts-line-curve  { animation: lineTrace 3.5s linear infinite; }
+.tracer-orange .recharts-line-curve  { animation: lineTrace 4.5s linear 0.5s infinite; }
+.tracer-green  .recharts-line-curve  { animation: lineTrace 4s   linear infinite; }
 
 /* Subtle glow on the base stroke lines */
 .recharts-area-curve {

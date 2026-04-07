@@ -94,6 +94,10 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
 
   const maxRev = data ? data.topProducts.reduce((m, p) => Math.max(m, p.totalRevenue), 0) : 0;
 
+  // Tổng nhập / xuất kho trong kỳ (tính từ inventoryChart)
+  const periodIn  = data ? data.inventoryChart.reduce((s, r) => s + r.in,  0) : 0;
+  const periodOut = data ? data.inventoryChart.reduce((s, r) => s + r.out, 0) : 0;
+
   // ── period selector ──────────────────────────────────────────────────────
   const periods = [
     { label: '7 ngày', value: 7 },
@@ -104,14 +108,14 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
   if (loading) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* skeleton summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12 }}>
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid-6" style={{ marginBottom: 0 }}>
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,245,255,0.08)', borderRadius: 6, padding: '16px 18px' }}>
             <Sk w={32} h={22} /><div style={{ height: 8 }} /><Sk w="70%" h={28} /><div style={{ height: 6 }} /><Sk w="50%" h={12} />
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+      <div className="grid-2" style={{ marginBottom: 0 }}>
         {[1, 2].map((i) => (
           <div key={i} style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,245,255,0.08)', borderRadius: 6, padding: '16px 18px', height: 240 }}>
             <Sk w="40%" h={14} /><div style={{ height: 12 }} /><Sk h={180} />
@@ -139,10 +143,16 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
       </div>
 
       {/* ── Summary cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12 }}>
+      <div className="grid-6" style={{ marginBottom: 0 }}>
         <SummaryCard icon="📦" label="Tổng sản phẩm" value={summary.totalProducts} color="var(--cyan)" />
         <SummaryCard icon="🏭" label="Tổng tồn kho" value={summary.totalStock.toLocaleString('vi-VN')} sub="đơn vị" color="var(--green)" />
         <SummaryCard icon="💰" label="Giá trị tồn kho" value={fmtK(summary.totalStockValue)} sub={fmt(summary.totalStockValue)} color="var(--purple)" />
+        <SummaryCard
+          icon="🔄" label={`Lưu lượng ${days}d`}
+          value={`${periodOut.toLocaleString('vi-VN')}`}
+          sub={`↓ Xuất • ↑ Nhập ${periodIn.toLocaleString('vi-VN')}`}
+          color="var(--cyan)"
+        />
         <SummaryCard
           icon="⚠️" label="Sắp hết hàng" value={summary.lowStockCount}
           sub="tồn kho ≤ 5" color="var(--yellow)"
@@ -156,7 +166,7 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
       </div>
 
       {/* ── Charts row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }}>
+      <div className="grid-2" style={{ marginBottom: 0 }}>
 
         {/* Inventory in/out chart */}
         <div className="form-panel" style={{ padding: '16px 18px' }}>
@@ -236,7 +246,7 @@ function ProductDashboard({ onJumpToList }: { onJumpToList: (status: string) => 
       </div>
 
       {/* ── Smart lists row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12 }}>
+      <div className="grid-3" style={{ marginBottom: 0 }}>
 
         {/* Top bán chạy */}
         <div className="form-panel" style={{ padding: '16px 18px' }}>

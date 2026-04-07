@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.3.6] — 2026-04-07
+
+### Tính năng mới
+
+#### Dashboard — Biểu đồ Nhập hàng & Xuất bán + Panel Công nợ
+- **📦 Nhập hàng & Xuất bán {year}**: Dual line chart hiển thị tổng giá trị nhập kho (cam) vs doanh thu bán ra (xanh lá) theo từng tháng
+  - Cùng style animation với chart "Tăng trưởng khách hàng": GlowDot pulse, GlowActiveDot halo, light tracer chạy dọc đường
+  - Floating background symbols `📦` + `IN`/`OUT` (`.trade-flow`) theo style chuẩn `moneyFloat`
+- **⚖️ Công nợ — Phải thu vs Phải trả**:
+  - 2 progress bar ngang scale theo bên lớn hơn (xanh = phải thu, đỏ = phải trả)
+  - Top 3 khách hàng đang nợ (clickable → mở HoloCard) và Top 3 NCC mình đang nợ
+  - Net balance row: hiển thị thu ròng (xanh `+`) hoặc trả ròng (đỏ `⚠`)
+
+### Cải tiến
+
+#### Purchase — Logic thanh toán nhà cung cấp
+- **Trang Nhập hàng**: thêm nút "Trả tiền" (xanh) + modal thanh toán (mirror pattern Invoices)
+- **Cột mới trong bảng**: "Đã trả" (xanh), "Còn lại" (đỏ nếu > 0)
+- **Confirm hủy**: thay `window.confirm()` bằng `ConfirmModal` (theo CLAUDE.md convention) — cảnh báo nếu đã trả tiền
+
+#### Backend — Fix double-count chi phí nhập hàng
+- **Bỏ tạo Cashflow khi tạo PurchaseOrder** → chuyển sang cash-based: chi phí chỉ phát sinh khi thực sự trả tiền NCC qua `SupplierPayment`
+- **Trước**: 1 PO 20tr → Dashboard hiển thị `Nhập hàng 20tr + supplier_payment 20tr = 40tr` (sai)
+- **Sau**: 1 PO 20tr trả đủ → chỉ ghi nhận 20tr 1 lần
+
+#### Supplier Payment — Schema relation + 2 modes
+- **schema.prisma**: thêm relation `PurchaseOrder ↔ SupplierPayment` (`purchaseOrderId` nullable cho legacy bulk payments)
+- **Service** với 2 mode:
+  - Mode 1 (`purchaseOrderId`): trả thẳng cho 1 PO cụ thể, update `paidAmount` + status
+  - Mode 2 (`supplierId`): trả tổng cho NCC → FIFO apply vào các PO chưa trả xong (oldest first)
+
+#### Products — Mobile responsive
+- Replace 5 hardcoded `gridTemplateColumns` bằng utility classes `.grid-6`, `.grid-3`, `.grid-2` (responsive 768px / 480px breakpoints)
+- Thêm card thứ 6 "Lưu lượng" → fill ô trống ở mobile 2-col layout
+
+#### Dashboard — Top staff filter + Floating symbols
+- "🏅 Top 3 nhân viên" chỉ list user có `totalRevenue > 0`
+- Thêm `.money-flow` ($ + VNĐ) bay nền chart "📈 Doanh thu & Lợi nhuận"
+- Thêm `.growth-flow` (+1 / ★ / NEW) bay nền chart "👥 Tăng trưởng khách hàng"
+
+---
+
 ## [0.3.5] — 2026-04-06
 
 ### Tính năng mới
