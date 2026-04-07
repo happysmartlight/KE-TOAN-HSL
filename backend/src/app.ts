@@ -238,10 +238,34 @@ app.post('/api/admin/restore', requireAdmin, uploadTmp.single('db'), async (req,
 // Serve frontend static files (production)
 const publicPath = path.join(__dirname, '../public');
 if (fs.existsSync(publicPath)) {
-  app.use(express.static(publicPath));
-  app.get('*', (_req, res) => {
+  // Vite sinh file hash-based trong thư mục /assets (vd: index-abc123.js).
+  // Những file này an toàn để cache lâu dài vì đổi filename mỗi build.
+  app.use(
+    express.static(publicPath, {
+      // index.html sẽ được xử lý riêng bên dưới để set no-cache
+      index: false,
+      setHeaders: (res, filePath) => {
+        if (/[\\/]assets[\\/]/.test(filePath)) {
+          // Asset có hash → cache 1 năm, immutable
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          // Các file tĩnh khác (favicon, robots.txt...) → cache ngắn
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+        }
+      },
+    }),
+  );
+
+  // index.html phải LUÔN được revalidate để browser lấy reference tới
+  // bundle JS/CSS mới nhất sau mỗi lần deploy.
+  const sendIndex = (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma',        'no-cache');
+    res.setHeader('Expires',       '0');
     res.sendFile(path.join(publicPath, 'index.html'));
-  });
+  };
+  app.get('/',  sendIndex);
+  app.get('*',  sendIndex);
 }
 
 // ── Global unhandled Express error handler ──
