@@ -10,12 +10,8 @@ BACKEND_DIR="$PROJECT_DIR/backend"
 FRONTEND_DIR="$PROJECT_DIR/frontend"
 
 GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
-log()      { echo -e "${GREEN}[✔]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[⚠]${NC} $1"; }
-log_err()  { echo -e "${RED}[✗]${NC} $1"; }
+log() { echo -e "${GREEN}[✔]${NC} $1"; }
 
 echo ""
 echo "=================================================="
@@ -23,24 +19,11 @@ echo "   Kế Toán Nội Bộ — Cập nhật"
 echo "=================================================="
 echo ""
 
-# --- Kiểm tra CI/CD trước khi deploy ---
-log "Kiểm tra CI/CD status (branch master)..."
-CI_BADGE_URL="https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg?branch=master"
-CI_STATUS=$(curl -s --max-time 10 "$CI_BADGE_URL" 2>/dev/null | grep -o 'passing\|failing' | head -1)
-
-if [ "$CI_STATUS" = "failing" ]; then
-  echo ""
-  log_err "CI/CD đang FAIL — Hủy cập nhật để tránh deploy code lỗi!"
-  log_err "Xem chi tiết: https://github.com/happysmartlight/KE-TOAN-HSL/actions"
-  echo ""
-  exit 1
-elif [ "$CI_STATUS" = "passing" ]; then
-  log "CI/CD PASS ✓ — Tiến hành cập nhật..."
-else
-  log_warn "Không kiểm tra được CI/CD (mất kết nối?). Tiếp tục cẩn thận..."
-fi
-
-echo ""
+# Lưu ý: kiểm tra CI/CD được thực hiện ở admin.service.ts TRƯỚC khi
+# gọi tới deploy.sh (dùng GitHub Checks API cho đúng SHA commit mới nhất).
+# Không kiểm tra lại ở đây để tránh trùng lặp log và tránh dùng badge
+# `?branch=master` — badge chỉ phản ánh run cuối cùng đã completed,
+# không chính xác khi CI của commit mới đang còn chạy.
 
 # --- Backend ---
 log "Cài backend dependencies..."
