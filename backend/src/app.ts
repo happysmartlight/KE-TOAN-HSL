@@ -97,8 +97,12 @@ app.use(
       },
     },
     crossOriginEmbedderPolicy: false,
-    // HSTS chỉ có hiệu lực khi truy cập qua HTTPS — nginx sẽ xử lý cert.
-    hsts: { maxAge: 60 * 60 * 24 * 180, includeSubDomains: true },
+    // HSTS chỉ bật khi backend chắc chắn nằm sau HTTPS (nginx/caddy).
+    // Mặc định TẮT để tránh ép browser upgrade sang https:// trên LAN HTTP
+    // (gây ERR_SSL_PROTOCOL_ERROR). Bật bằng ENABLE_HSTS=1 trong production.
+    hsts: process.env.ENABLE_HSTS === '1'
+      ? { maxAge: 60 * 60 * 24 * 180, includeSubDomains: true }
+      : false,
   }),
 );
 
