@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { exec, spawn } from 'child_process';
+import { seedDemoData } from '../../seed/seed-demo';
 
 const prisma = new PrismaClient();
 
@@ -783,6 +784,24 @@ export const adminService = {
       await tx.customer.deleteMany();
       await tx.supplier.deleteMany();
       await tx.product.deleteMany();
+    });
+  },
+
+  // Chạy seed demo từ prisma/seed.ts — giữ lại admin đang đăng nhập
+  async runDemoSeed(currentAdminId?: number) {
+    return await seedDemoData(prisma, { preserveAdminId: currentAdminId, verbose: false });
+  },
+
+  // Reset về production: xóa hết dữ liệu nghiệp vụ + xóa users staff demo (giữ admin)
+  async resetForProduction(currentAdminId?: number) {
+    await this.purgeAll();
+    await prisma.$transaction(async (tx) => {
+      await tx.profileUpdateRequest.deleteMany();
+      await tx.employmentCycle.deleteMany();
+      // Xóa tất cả user trừ admin đang đăng nhập
+      if (currentAdminId) {
+        await tx.user.deleteMany({ where: { id: { not: currentAdminId } } });
+      }
     });
   },
 

@@ -9,6 +9,8 @@ adminRouter.get('/stats',           adminController.getStats);
 adminRouter.get('/health',          adminController.getHealth);
 adminRouter.delete('/purge/:group', adminController.purgeGroup);
 adminRouter.delete('/purge-all',    adminController.purgeAll);
+adminRouter.post('/seed-demo',      adminController.runDemoSeed);
+adminRouter.post('/reset-production', adminController.resetForProduction);
 adminRouter.get('/network',               adminController.getNetworkInfo);
 adminRouter.get('/tailscale/state',       adminController.getTailscaleState);
 adminRouter.post('/tailscale/start',      adminController.startTailscaleSetup);

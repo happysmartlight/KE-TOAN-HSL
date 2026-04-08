@@ -97,6 +97,8 @@ export default function SystemAdmin() {
 
   const [confirmGroup, setConfirmGroup] = useState<GroupDef | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [confirmSeed, setConfirmSeed] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
 
   const loadStats = async () => {
@@ -139,6 +141,39 @@ export default function SystemAdmin() {
     }
   };
 
+  const doSeedDemo = async (password: string) => {
+    setBusy(true);
+    try {
+      const r = await api.post('/admin/seed-demo', { password });
+      const c = r.data?.counts;
+      toast.success(
+        c
+          ? `Đã nạp dữ liệu demo: ${c.invoices} HĐ, ${c.customers} KH, ${c.products} SP, ${c.users} NV`
+          : 'Đã nạp dữ liệu demo thành công'
+      );
+      await loadStats();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi chạy seed demo');
+    } finally {
+      setBusy(false);
+      setConfirmSeed(false);
+    }
+  };
+
+  const doResetProduction = async (password: string) => {
+    setBusy(true);
+    try {
+      await api.post('/admin/reset-production', { password });
+      toast.success('Đã xóa hết dữ liệu demo. Hệ thống sẵn sàng cho sử dụng thực tế.');
+      await loadStats();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Lỗi khi reset');
+    } finally {
+      setBusy(false);
+      setConfirmReset(false);
+    }
+  };
+
 
   return (
     <div>
@@ -177,6 +212,67 @@ export default function SystemAdmin() {
           </div>
         </div>
       )}
+
+      {/* Demo seed / Production reset panel */}
+      <div
+        className="form-panel mb-16"
+        style={{
+          padding: '16px 18px',
+          border: '1px solid rgba(191,0,255,0.35)',
+          background: 'rgba(191,0,255,0.04)',
+        }}
+      >
+        <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 12, letterSpacing: 1, textTransform: 'uppercase' }}>
+          🧪 Dữ liệu thử nghiệm
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
+          {/* Seed demo */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ fontSize: 22 }}>🌱</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--purple)', marginBottom: 4 }}>
+                Nạp dữ liệu demo
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 8 }}>
+                Tạo nhanh dữ liệu mẫu (POI Lighttoys, mạch điều khiển, màn hình LED): 6 nhân viên, 6 NCC, 26 sản phẩm, 14 KH, ~8 đơn nhập, ~47 hóa đơn trải đều 2025–2026 + chi phí định kỳ.
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--yellow)', marginBottom: 8 }}>
+                ⚠ Thao tác này sẽ XÓA toàn bộ dữ liệu hiện tại trước khi seed (giữ lại tài khoản đang đăng nhập).
+              </div>
+              <button
+                className="btn purple btn-sm"
+                disabled={busy}
+                onClick={() => setConfirmSeed(true)}
+              >
+                🌱 Chạy dữ liệu demo
+              </button>
+            </div>
+          </div>
+
+          {/* Reset for production */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <span style={{ fontSize: 22 }}>🚀</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>
+                Bắt đầu sử dụng thực tế
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-dim)', lineHeight: 1.6, marginBottom: 8 }}>
+                Xóa sạch toàn bộ dữ liệu demo (KH, NCC, SP, hóa đơn, đơn nhập, thu/chi, tồn kho, log) và mọi tài khoản nhân viên demo. Hệ thống về trạng thái sạch để bắt đầu nhập liệu thật.
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--yellow)', marginBottom: 8 }}>
+                ⚠ Giữ lại: tài khoản admin đang đăng nhập + danh mục thu/chi mặc định.
+              </div>
+              <button
+                className="btn green btn-sm"
+                disabled={busy}
+                onClick={() => setConfirmReset(true)}
+              >
+                🚀 Xóa demo &amp; bắt đầu thực tế
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Group cards */}
       <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 10, letterSpacing: 1, textTransform: 'uppercase' }}>
@@ -264,6 +360,34 @@ export default function SystemAdmin() {
           requirePassword
           onConfirm={(pwd) => doDeleteGroup(confirmGroup.key, pwd!)}
           onCancel={() => setConfirmGroup(null)}
+        />
+      )}
+
+      {/* Confirm seed demo */}
+      {confirmSeed && (
+        <ConfirmModal
+          title="🌱 Nạp dữ liệu demo"
+          message="Hệ thống sẽ XÓA toàn bộ dữ liệu hiện tại (KH, NCC, SP, hóa đơn, đơn nhập, thu/chi, log, tồn kho, nhân viên khác) và nạp lại bộ dữ liệu mẫu chuyên ngành LED/POI Lighttoys."
+          warning="Tài khoản admin đang đăng nhập sẽ được giữ nguyên. Quá trình có thể mất 10-30 giây."
+          confirmLabel="Bắt đầu seed"
+          typeToConfirm="DEMO"
+          requirePassword
+          onConfirm={(pwd) => doSeedDemo(pwd!)}
+          onCancel={() => setConfirmSeed(false)}
+        />
+      )}
+
+      {/* Confirm reset for production */}
+      {confirmReset && (
+        <ConfirmModal
+          title="🚀 Bắt đầu sử dụng thực tế"
+          message="Hệ thống sẽ XÓA SẠCH toàn bộ dữ liệu demo: khách hàng, nhà cung cấp, sản phẩm, hóa đơn, đơn nhập, thu/chi, log, tồn kho và mọi tài khoản nhân viên demo."
+          warning="Chỉ giữ lại tài khoản admin đang đăng nhập và danh mục thu/chi mặc định. KHÔNG THỂ HOÀN TÁC!"
+          confirmLabel="Xóa demo & bắt đầu thực tế"
+          typeToConfirm="BAT DAU"
+          requirePassword
+          onConfirm={(pwd) => doResetProduction(pwd!)}
+          onCancel={() => setConfirmReset(false)}
         />
       )}
 

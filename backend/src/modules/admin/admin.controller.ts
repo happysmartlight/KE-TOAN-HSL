@@ -60,6 +60,29 @@ export const adminController = {
     }
   },
 
+  async runDemoSeed(req: Request, res: Response) {
+    if (!await verifyPassword(req, res)) return;
+    try {
+      const adminId = (req as any).user?.id;
+      const counts = await adminService.runDemoSeed(adminId);
+      res.json({ ok: true, counts });
+    } catch (err: any) {
+      console.error('[runDemoSeed]', err);
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  async resetForProduction(req: Request, res: Response) {
+    if (!await verifyPassword(req, res)) return;
+    try {
+      const adminId = (req as any).user?.id;
+      await adminService.resetForProduction(adminId);
+      res.json({ ok: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
   getTailscaleState(_req: Request, res: Response) {
     res.json(adminService.getTailscaleState());
   },

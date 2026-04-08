@@ -32,28 +32,28 @@
   "supplier": [
     {
       "label": "THÁCH ĐẤU",
-      "min": 50000000,
+      "min": 450000000,
       "icon": "⚔️",
       "color": "#ff2244",
       "glow": "#ff003344"
     },
     {
       "label": "KIM CƯƠNG",
-      "min": 20000000,
+      "min": 400000000,
       "icon": "💎",
       "color": "#00d4ff",
       "glow": "#00aaff44"
     },
     {
       "label": "BẠCH KIM",
-      "min": 10000000,
+      "min": 100000000,
       "icon": "🔮",
       "color": "#bf80ff",
       "glow": "#9944ff44"
     },
     {
       "label": "VÀNG",
-      "min": 5000000,
+      "min": 80000000,
       "icon": "⭐",
       "color": "#ffcc00",
       "glow": "#ffaa0044"
@@ -62,28 +62,28 @@
   "product": [
     {
       "label": "THÁCH ĐẤU",
-      "min": 50000000,
+      "min": 150000000,
       "icon": "⚔️",
       "color": "#ff2244",
       "glow": "#ff003344"
     },
     {
       "label": "KIM CƯƠNG",
-      "min": 20000000,
+      "min": 100000000,
       "icon": "💎",
       "color": "#00d4ff",
       "glow": "#00aaff44"
     },
     {
       "label": "BẠCH KIM",
-      "min": 10000000,
+      "min": 70000000,
       "icon": "🔮",
       "color": "#bf80ff",
       "glow": "#9944ff44"
     },
     {
       "label": "VÀNG",
-      "min": 5000000,
+      "min": 50000000,
       "icon": "⭐",
       "color": "#ffcc00",
       "glow": "#ffaa0044"
