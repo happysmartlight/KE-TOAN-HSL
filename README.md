@@ -1,6 +1,8 @@
 # Kế Toán Nội Bộ
 
 [![CI](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/ci.yml)
+[![Test install.bat](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/test-install-bat.yml/badge.svg?branch=master)](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/test-install-bat.yml)
+[![Test install.sh](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/test-install-sh.yml/badge.svg?branch=master)](https://github.com/happysmartlight/KE-TOAN-HSL/actions/workflows/test-install-sh.yml)
 
 Hệ thống kế toán nội bộ cho doanh nghiệp nhỏ.
 
