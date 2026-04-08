@@ -334,9 +334,9 @@ html,body,#root{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
   gap:16px;
-  align-items:start;
+  align-items:stretch;
 }
-.network-access-grid > *{min-width:0}
+.network-access-grid > *{min-width:0;height:100%;display:flex;flex-direction:column}
 @media (max-width:1024px){
   .network-access-grid{grid-template-columns:1fr}
 }
