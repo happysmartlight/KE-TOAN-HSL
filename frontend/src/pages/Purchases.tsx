@@ -25,17 +25,64 @@ export default function Purchases() {
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
   const [payModal, setPayModal]   = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer'>('transfer');
   const [confirmCancel, setConfirmCancel] = useState<any>(null);
 
+  // Tab + history
+  const [tab, setTab] = useState<'list' | 'payments'>('list');
+  const [payments, setPayments] = useState<any[]>([]);
+  const [payFilter, setPayFilter] = useState<FilterState>(defaultFilter);
+  const [confirmUndoPay, setConfirmUndoPay] = useState<any>(null);
+
   useEscKey(
-    payModal       ? () => { setPayModal(null); setPayAmount(''); } :
+    payModal       ? () => { setPayModal(null); setPayAmount(''); setPayMethod('transfer'); } :
+    confirmUndoPay ? () => setConfirmUndoPay(null) :
     confirmCancel  ? () => setConfirmCancel(null) :
     open           ? () => setOpen(false) : null
   );
 
   const [loading, setLoading] = useState(true);
   const load = () => api.get('/purchases').then((r) => { setRows(r.data); setLoading(false); });
-  useEffect(() => { load(); api.get('/suppliers').then((r) => setSuppliers(r.data)); api.get('/products').then((r) => setProducts(r.data)); }, []);
+  const loadPayments = () => api.get('/purchases/supplier-payments/all').then((r) => setPayments(r.data));
+  useEffect(() => {
+    load();
+    loadPayments();
+    api.get('/suppliers').then((r) => setSuppliers(r.data));
+    api.get('/products').then((r) => setProducts(r.data));
+  }, []);
+
+  const doUndoPayment = async (p: any) => {
+    try {
+      await api.delete(`/purchases/supplier-payments/${p.id}`);
+      setConfirmUndoPay(null);
+      await Promise.all([load(), loadPayments(), api.get('/suppliers').then((r) => setSuppliers(r.data))]);
+      toast.success('Đã hoàn tác phiếu chi');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Lỗi khi hoàn tác');
+    }
+  };
+
+  const filteredPayments = useMemo(() => {
+    let r = [...payments];
+    if (payFilter.search) {
+      const q = payFilter.search.toLowerCase();
+      r = r.filter((p) =>
+        p.supplier?.name?.toLowerCase().includes(q) ||
+        p.purchaseOrder?.code?.toLowerCase().includes(q) ||
+        p.note?.toLowerCase().includes(q)
+      );
+    }
+    if (payFilter.dateFrom)  r = r.filter((p) => new Date(p.createdAt) >= new Date(payFilter.dateFrom));
+    if (payFilter.dateTo)    r = r.filter((p) => new Date(p.createdAt) <= new Date(payFilter.dateTo + 'T23:59:59'));
+    if (payFilter.amountMin) r = r.filter((p) => p.amount >= Number(payFilter.amountMin));
+    if (payFilter.amountMax) r = r.filter((p) => p.amount <= Number(payFilter.amountMax));
+    r.sort((a, b) => {
+      const dir = payFilter.sortDir === 'desc' ? -1 : 1;
+      if (payFilter.sortBy === 'amount') return dir * (a.amount - b.amount);
+      return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+    return r;
+  }, [payments, payFilter]);
 
   const addItem = () => setItems([...items, { productId: '', quantity: 1, costPrice: 0 }]);
   const updateItem = (i: number, field: string, val: any) => {
@@ -93,10 +140,11 @@ export default function Purchases() {
       await api.post('/purchases/supplier-payments', {
         purchaseOrderId: payModal.id,
         amount: Number(payAmount),
+        method: payMethod,
       });
-      setPayModal(null); setPayAmount('');
+      setPayModal(null); setPayAmount(''); setPayMethod('transfer');
       toast.success('Đã thanh toán');
-      load();
+      await Promise.all([load(), loadPayments(), api.get('/suppliers').then((r) => setSuppliers(r.data))]);
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
@@ -104,8 +152,28 @@ export default function Purchases() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Nhập hàng</h1>
-        <button className="btn cyan" onClick={() => setOpen(!open)}>+ Tạo đơn nhập</button>
+        <button className="btn cyan" onClick={() => { setTab('list'); setOpen(!open); }}>+ Tạo đơn nhập</button>
       </div>
+
+      {/* ── Tab selector ── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        <button
+          className={`btn ${tab === 'list' ? 'cyan' : 'ghost'}`}
+          style={{ flex: '1 1 auto', borderRadius: 4 }}
+          onClick={() => setTab('list')}
+        >
+          🛒 Danh sách đơn nhập
+        </button>
+        <button
+          className={`btn ${tab === 'payments' ? 'cyan' : 'ghost'}`}
+          style={{ flex: '1 1 auto', borderRadius: 4 }}
+          onClick={() => setTab('payments')}
+        >
+          💸 Lịch sử trả tiền {payments.length > 0 && <span style={{ opacity: 0.6 }}>({payments.length})</span>}
+        </button>
+      </div>
+
+      {tab === 'list' && (<>
 
       {open && (
         <div className="form-panel mb-16">
@@ -256,6 +324,82 @@ export default function Purchases() {
           </tbody>
         </table>
       </div>
+      </>)}
+
+      {/* ══════════════ TAB: PAYMENTS ══════════════ */}
+      {tab === 'payments' && (
+        <>
+          <FilterBar
+            value={payFilter} onChange={setPayFilter}
+            totalCount={payments.length} resultCount={filteredPayments.length}
+            searchPlaceholder="Tìm NCC, mã đơn nhập..."
+            sortOptions={[
+              { value: 'date_desc',   label: '↓ Ngày mới nhất' },
+              { value: 'date_asc',    label: '↑ Ngày cũ nhất' },
+              { value: 'amount_desc', label: '↓ Tiền nhiều nhất' },
+              { value: 'amount_asc',  label: '↑ Tiền ít nhất' },
+            ]}
+          />
+
+          <div className="table-wrap">
+            <table className="nt">
+              <thead><tr>
+                <th>Ngày trả</th>
+                <th>Nhà cung cấp</th>
+                <th>Đơn nhập</th>
+                <th>Số tiền trả</th>
+                <th>Phương thức</th>
+                <th>Ghi chú</th>
+                <th></th>
+              </tr></thead>
+              <tbody>
+                {filteredPayments.length === 0 && (
+                  <tr className="empty-row"><td colSpan={7}>
+                    <EmptyState
+                      icon="💸"
+                      title={payments.length === 0 ? 'Chưa có phiếu chi nào' : 'Không tìm thấy kết quả'}
+                      description={payments.length === 0 ? 'Mỗi lần kế toán bấm "Trả tiền" trên đơn nhập sẽ tự động ghi vào đây.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'}
+                    />
+                  </td></tr>
+                )}
+                {filteredPayments.map((p) => {
+                  const poCancelled = p.purchaseOrder?.status === 'cancelled';
+                  return (
+                    <tr key={p.id}>
+                      <td className="c-dim" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                        {new Date(p.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </td>
+                      <td>
+                        <div className="c-bright fw7">{p.supplier?.name || '—'}</div>
+                      </td>
+                      <td>
+                        {p.purchaseOrder ? (
+                          <>
+                            <div className="c-cyan" style={{ fontSize: 12 }}>{p.purchaseOrder.code}</div>
+                            {poCancelled && <span className="tag red" style={{ marginTop: 3, fontSize: 9 }}>Đơn đã hủy</span>}
+                          </>
+                        ) : (
+                          <span className="tag yellow" style={{ fontSize: 9 }}>Trả tổng (FIFO)</span>
+                        )}
+                      </td>
+                      <td className="c-red fw7">{fmt(p.amount)}</td>
+                      <td>
+                        <span className={`tag ${p.method === 'transfer' ? 'cyan' : 'yellow'}`}>
+                          {p.method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}
+                        </span>
+                      </td>
+                      <td className="c-dim" style={{ fontSize: 11, maxWidth: 220 }}>{p.note || '—'}</td>
+                      <td>
+                        <button className="btn red btn-sm" onClick={() => setConfirmUndoPay(p)}>↶ Hoàn tác</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* ── Thanh toán modal ── */}
       {payModal && (
@@ -280,12 +424,45 @@ export default function Purchases() {
             </div>
             <label className="lbl">Số tiền trả</label>
             <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
+
+            <label className="lbl">Phương thức thanh toán</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button
+                type="button"
+                className={`btn ${payMethod === 'cash' ? 'yellow' : 'ghost'}`}
+                style={{ flex: 1 }}
+                onClick={() => setPayMethod('cash')}
+              >
+                💵 Tiền mặt
+              </button>
+              <button
+                type="button"
+                className={`btn ${payMethod === 'transfer' ? 'cyan' : 'ghost'}`}
+                style={{ flex: 1 }}
+                onClick={() => setPayMethod('transfer')}
+              >
+                🏦 Chuyển khoản
+              </button>
+            </div>
+
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
-              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); }}>[ Hủy ]</button>
+              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); setPayMethod('transfer'); }}>[ Hủy ]</button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Hoàn tác phiếu chi ── */}
+      {confirmUndoPay && (
+        <ConfirmModal
+          title="Hoàn tác phiếu chi"
+          message={`Bạn có chắc muốn hoàn tác khoản chi ${fmt(confirmUndoPay.amount)} cho ${confirmUndoPay.supplier?.name ?? '—'}${confirmUndoPay.purchaseOrder ? ` (đơn ${confirmUndoPay.purchaseOrder.code})` : ' (trả tổng)'}?`}
+          warning="Số tiền sẽ được trừ khỏi đã trả của đơn nhập, công nợ NCC tăng lại, và bút toán thu chi tương ứng sẽ bị xóa."
+          confirmLabel="↶ Hoàn tác"
+          onConfirm={() => doUndoPayment(confirmUndoPay)}
+          onCancel={() => setConfirmUndoPay(null)}
+        />
       )}
 
       {/* ── Confirm cancel modal ── */}

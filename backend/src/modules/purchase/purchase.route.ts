@@ -13,3 +13,4 @@ purchaseRouter.patch('/:id/cancel', requireAdmin, purchaseController.cancel);
 // Supplier payments
 purchaseRouter.get('/supplier-payments/all', supplierPaymentController.getAll);
 purchaseRouter.post('/supplier-payments', supplierPaymentController.create);
+purchaseRouter.delete('/supplier-payments/:id', supplierPaymentController.delete);

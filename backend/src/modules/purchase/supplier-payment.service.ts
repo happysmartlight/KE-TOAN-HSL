@@ -143,4 +143,68 @@ export const supplierPaymentService = {
 
     throw new Error('Thiếu mã đơn nhập hoặc mã nhà cung cấp');
   },
+
+  /**
+   * Hoàn tác (xóa) một supplier payment + đảo ngược toàn bộ hậu quả:
+   *  - Trừ paidAmount của PO (nếu có), recompute status
+   *  - Nếu là bulk payment (không gắn PO): FIFO ngược — trừ vào các PO đã trả gần nhất
+   *  - Tăng lại công nợ NCC
+   *  - Xóa cashflow expense tương ứng
+   */
+  async delete(id: number) {
+    const payment = await prisma.supplierPayment.findUnique({
+      where: { id },
+      include: { purchaseOrder: true, supplier: true },
+    });
+    if (!payment) throw new Error('Không tìm thấy phiếu chi');
+
+    return prisma.$transaction(async (tx) => {
+      // Mode 1: payment gắn 1 PO cụ thể → revert thẳng PO đó
+      if (payment.purchaseOrderId && payment.purchaseOrder) {
+        const po = payment.purchaseOrder;
+        const newPaid = Math.max(0, po.paidAmount - payment.amount);
+        await tx.purchaseOrder.update({
+          where: { id: po.id },
+          data: { paidAmount: newPaid, status: calcStatus(po.totalAmount, newPaid, po.status) },
+        });
+      } else {
+        // Mode 2: bulk payment — FIFO ngược: trừ vào các PO đã trả mới nhất trước
+        const paidPOs = await tx.purchaseOrder.findMany({
+          where: {
+            supplierId: payment.supplierId,
+            status: { in: ['paid', 'partial'] },
+            paidAmount: { gt: 0 },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        let remaining = payment.amount;
+        for (const po of paidPOs) {
+          if (remaining <= 0) break;
+          const removable = Math.min(remaining, po.paidAmount);
+          const newPaid = po.paidAmount - removable;
+          await tx.purchaseOrder.update({
+            where: { id: po.id },
+            data: { paidAmount: newPaid, status: calcStatus(po.totalAmount, newPaid, po.status) },
+          });
+          remaining -= removable;
+        }
+      }
+
+      // Tăng lại công nợ NCC
+      await tx.supplier.update({
+        where: { id: payment.supplierId },
+        data: { debt: { increment: payment.amount } },
+      });
+
+      // Xóa cashflow expense (refType='supplier_payment', refId=payment.id)
+      await tx.cashflow.deleteMany({
+        where: { refType: 'supplier_payment', refId: payment.id },
+      });
+
+      // Xóa payment
+      await tx.supplierPayment.delete({ where: { id: payment.id } });
+
+      return { ok: true };
+    });
+  },
 };
