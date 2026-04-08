@@ -72,19 +72,9 @@ export async function seedDemoData(prisma: PrismaClient, opts: SeedOptions = {})
   const preservedAdmin = preserveAdminId
     ? await prisma.user.findUnique({ where: { id: preserveAdminId } })
     : null;
-  const preservedUsername = preservedAdmin?.username ?? null;
-
-  // Admin demo: nếu preserveAdminId → dùng user đang đăng nhập làm admin demo
-  //            ngược lại → upsert theo username 'admin'
-  const admin = preservedAdmin ?? await prisma.user.upsert({
-    where: { username: 'admin' },
-    update: { role: 'admin' },
-    create: {
-      username: 'admin', password: adminPass, name: 'Nguyễn Bằng',
-      role: 'admin', email: 'admin@happysmartlight.vn', phone: '0901000001',
-      startDate: dt('2024-01-01'), employmentStatus: 'active',
-    },
-  });
+  // Lowercase để so sánh case-insensitive (MySQL collation utf8mb4_general_ci
+  // coi 'Admin' và 'admin' là cùng row, JS thì không)
+  const preservedUsername = preservedAdmin?.username?.toLowerCase() ?? null;
 
   const staffSeed = [
     { username: 'thuylinh',  name: 'Trần Thùy Linh',   email: 'linh@hsl.vn',   phone: '0901000010', start: '2024-02-01' },
@@ -94,21 +84,36 @@ export async function seedDemoData(prisma: PrismaClient, opts: SeedOptions = {})
     { username: 'kimanh',    name: 'Vũ Kim Anh',       email: 'kimanh@hsl.vn', phone: '0901000014', start: '2025-01-10' },
   ];
 
+  // ── Hard-delete tất cả user trùng username (trừ preserved admin) ─────────
+  // Tránh lỗi P2002 do upsert race / collation mismatch / state lệch từ lần
+  // seed trước. Sau bước này, chắc chắn DB sạch các username sắp tạo.
+  const targetUsernames = [...staffSeed.map((s) => s.username), 'oldnv', 'admin'];
+  await prisma.user.deleteMany({
+    where: {
+      username: { in: targetUsernames },
+      ...(preserveAdminId ? { id: { not: preserveAdminId } } : {}),
+    },
+  });
+
+  // Admin demo: nếu preserveAdminId → dùng user đang đăng nhập làm admin demo
+  //            ngược lại → tạo mới (bảng đã sạch)
+  const admin = preservedAdmin ?? await prisma.user.create({
+    data: {
+      username: 'admin', password: adminPass, name: 'Nguyễn Bằng',
+      role: 'admin', email: 'admin@happysmartlight.vn', phone: '0901000001',
+      startDate: dt('2024-01-01'), employmentStatus: 'active',
+    },
+  });
+
   const staffUsers: any[] = [];
   for (const s of staffSeed) {
-    // Skip nếu username trùng với admin đang preserve (tránh ghi đè)
-    if (preservedUsername === s.username) {
+    // Skip nếu username trùng với admin đang preserve (case-insensitive)
+    if (preservedUsername === s.username.toLowerCase()) {
       staffUsers.push(admin);
       continue;
     }
-    // upsert để idempotent — không lỗi khi seed nhiều lần
-    const u = await prisma.user.upsert({
-      where: { username: s.username },
-      update: {
-        password: staffPass, name: s.name, role: 'staff',
-        email: s.email, phone: s.phone, startDate: dt(s.start), employmentStatus: 'active',
-      },
-      create: {
+    const u = await prisma.user.create({
+      data: {
         username: s.username, password: staffPass, name: s.name, role: 'staff',
         email: s.email, phone: s.phone, startDate: dt(s.start), employmentStatus: 'active',
       },
@@ -122,14 +127,8 @@ export async function seedDemoData(prisma: PrismaClient, opts: SeedOptions = {})
   // 1 nhân viên đã nghỉ
   const resigned = preservedUsername === 'oldnv'
     ? admin
-    : await prisma.user.upsert({
-        where: { username: 'oldnv' },
-        update: {
-          password: staffPass, name: 'Hoàng Văn Cũ', role: 'staff',
-          email: 'old@hsl.vn', phone: '0901000099',
-          startDate: dt('2024-01-15'), endDate: dt('2025-06-30'), employmentStatus: 'resigned',
-        },
-        create: {
+    : await prisma.user.create({
+        data: {
           username: 'oldnv', password: staffPass, name: 'Hoàng Văn Cũ', role: 'staff',
           email: 'old@hsl.vn', phone: '0901000099',
           startDate: dt('2024-01-15'), endDate: dt('2025-06-30'), employmentStatus: 'resigned',
