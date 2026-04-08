@@ -770,21 +770,27 @@ export const adminService = {
 
   async purgeAll() {
     // Xóa toàn bộ dữ liệu nghiệp vụ, giữ lại: User, CashflowCategory
-    await prisma.$transaction(async (tx) => {
-      await tx.deleteRequest.deleteMany();
-      await tx.activityLog.deleteMany();
-      await tx.cashflow.deleteMany();
-      await tx.supplierPayment.deleteMany();
-      await tx.inventoryLog.deleteMany();
-      await tx.invoiceItem.deleteMany();
-      await tx.purchaseItem.deleteMany();
-      await tx.payment.deleteMany();
-      await tx.invoice.deleteMany();
-      await tx.purchaseOrder.deleteMany();
-      await tx.customer.deleteMany();
-      await tx.supplier.deleteMany();
-      await tx.product.deleteMany();
-    });
+    // SET FOREIGN_KEY_CHECKS = 0 để tránh lỗi FK khi có dữ liệu orphan
+    // (không dùng $transaction vì FK_CHECKS là session-level và $transaction
+    // có thể chạy ở connection khác)
+    await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+      await prisma.deleteRequest.deleteMany();
+      await prisma.activityLog.deleteMany();
+      await prisma.cashflow.deleteMany();
+      await prisma.supplierPayment.deleteMany();
+      await prisma.inventoryLog.deleteMany();
+      await prisma.invoiceItem.deleteMany();
+      await prisma.purchaseItem.deleteMany();
+      await prisma.payment.deleteMany();
+      await prisma.invoice.deleteMany();
+      await prisma.purchaseOrder.deleteMany();
+      await prisma.customer.deleteMany();
+      await prisma.supplier.deleteMany();
+      await prisma.product.deleteMany();
+    } finally {
+      await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1');
+    }
   },
 
   // Chạy seed demo từ prisma/seed.ts — giữ lại admin đang đăng nhập
@@ -795,14 +801,17 @@ export const adminService = {
   // Reset về production: xóa hết dữ liệu nghiệp vụ + xóa users staff demo (giữ admin)
   async resetForProduction(currentAdminId?: number) {
     await this.purgeAll();
-    await prisma.$transaction(async (tx) => {
-      await tx.profileUpdateRequest.deleteMany();
-      await tx.employmentCycle.deleteMany();
+    await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+      await prisma.profileUpdateRequest.deleteMany();
+      await prisma.employmentCycle.deleteMany();
       // Xóa tất cả user trừ admin đang đăng nhập
       if (currentAdminId) {
-        await tx.user.deleteMany({ where: { id: { not: currentAdminId } } });
+        await prisma.user.deleteMany({ where: { id: { not: currentAdminId } } });
       }
-    });
+    } finally {
+      await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1');
+    }
   },
 
   getVersion() {

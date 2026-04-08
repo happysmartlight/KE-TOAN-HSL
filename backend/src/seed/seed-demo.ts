@@ -31,27 +31,34 @@ export async function seedDemoData(prisma: PrismaClient, opts: SeedOptions = {})
   log('🌱  Bắt đầu seed dữ liệu demo (LED / POI Lighttoys / Màn hình LED)...\n');
 
   // ─── Reset transactional data (giữ lại CashflowCategory builtin) ───
+  // Dùng SET FOREIGN_KEY_CHECKS=0 để purge sạch, tránh lỗi FK khi có dữ liệu
+  // lộn xộn từ lần seed trước hoặc từ XML import thực tế.
   log('🧹  Xóa dữ liệu giao dịch cũ...');
-  await prisma.payment.deleteMany();
-  await prisma.invoiceItem.deleteMany();
-  await prisma.invoice.deleteMany();
-  await prisma.supplierPayment.deleteMany();
-  await prisma.purchaseItem.deleteMany();
-  await prisma.purchaseOrder.deleteMany();
-  await prisma.cashflow.deleteMany();
-  await prisma.inventoryLog.deleteMany();
-  await prisma.deleteRequest.deleteMany();
-  await prisma.profileUpdateRequest.deleteMany();
-  await prisma.employmentCycle.deleteMany();
-  await prisma.activityLog.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.customer.deleteMany();
-  await prisma.supplier.deleteMany();
-  // Xóa users — TRỪ admin đang đăng nhập (nếu có) để không bị logout
-  if (preserveAdminId) {
-    await prisma.user.deleteMany({ where: { id: { not: preserveAdminId } } });
-  } else {
-    await prisma.user.deleteMany();
+  await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0');
+  try {
+    await prisma.payment.deleteMany();
+    await prisma.invoiceItem.deleteMany();
+    await prisma.invoice.deleteMany();
+    await prisma.supplierPayment.deleteMany();
+    await prisma.purchaseItem.deleteMany();
+    await prisma.purchaseOrder.deleteMany();
+    await prisma.cashflow.deleteMany();
+    await prisma.inventoryLog.deleteMany();
+    await prisma.deleteRequest.deleteMany();
+    await prisma.profileUpdateRequest.deleteMany();
+    await prisma.employmentCycle.deleteMany();
+    await prisma.activityLog.deleteMany();
+    await prisma.product.deleteMany();
+    await prisma.customer.deleteMany();
+    await prisma.supplier.deleteMany();
+    // Xóa users — TRỪ admin đang đăng nhập (nếu có) để không bị logout
+    if (preserveAdminId) {
+      await prisma.user.deleteMany({ where: { id: { not: preserveAdminId } } });
+    } else {
+      await prisma.user.deleteMany();
+    }
+  } finally {
+    await prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1');
   }
 
   // ============================================================
