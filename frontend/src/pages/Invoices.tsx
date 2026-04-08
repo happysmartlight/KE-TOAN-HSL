@@ -121,6 +121,12 @@ export default function Invoices() {
   const [detailInv, setDetailInv] = useState<any>(null);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
 
+  // ── Tab state + payment history ───────────────────────────────────────────
+  const [tab, setTab] = useState<'list' | 'payments'>('list');
+  const [payments, setPayments] = useState<any[]>([]);
+  const [payFilter, setPayFilter] = useState<FilterState>(defaultFilter);
+  const [confirmUndoPay, setConfirmUndoPay] = useState<any>(null);
+
   // Inline new customer
   const [showNewCustomer, setShowNewCustomer] = useState(false);
   const [newCustomer, setNewCustomer] = useState(emptyNewCustomer);
@@ -144,17 +150,56 @@ export default function Invoices() {
   useEscKey(
     detailInv       ? () => setDetailInv(null) :
     payModal        ? () => { setPayModal(null); setPayAmount(''); } :
+    confirmUndoPay  ? () => setConfirmUndoPay(null) :
     showNewCustomer ? () => setShowNewCustomer(false) :
     open            ? () => setOpen(false) : null
   );
 
   const loadCustomers = () => api.get('/customers').then((r) => setCustomers(r.data));
   const load = () => api.get('/invoices').then((r) => setRows(r.data));
+  const loadPayments = () => api.get('/payments').then((r) => setPayments(r.data));
   useEffect(() => {
     load();
     loadCustomers();
+    loadPayments();
     api.get('/products').then((r) => setProducts(r.data));
   }, []);
+
+  // ── Undo payment ──────────────────────────────────────────────────────────
+  const doUndoPayment = async (p: any) => {
+    try {
+      await api.delete(`/payments/${p.id}`);
+      setConfirmUndoPay(null);
+      await Promise.all([load(), loadPayments(), loadCustomers()]);
+      toast.success('Đã hoàn tác phiếu thu');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Lỗi khi hoàn tác');
+    }
+  };
+
+  // Filtered payments
+  const filteredPayments = useMemo(() => {
+    let r = [...payments];
+    if (payFilter.search) {
+      const q = payFilter.search.toLowerCase();
+      r = r.filter((p) =>
+        p.customer?.name?.toLowerCase().includes(q) ||
+        p.invoice?.code?.toLowerCase().includes(q) ||
+        p.invoice?.eInvoiceCode?.toLowerCase().includes(q) ||
+        p.note?.toLowerCase().includes(q)
+      );
+    }
+    if (payFilter.dateFrom)  r = r.filter((p) => new Date(p.createdAt) >= new Date(payFilter.dateFrom));
+    if (payFilter.dateTo)    r = r.filter((p) => new Date(p.createdAt) <= new Date(payFilter.dateTo + 'T23:59:59'));
+    if (payFilter.amountMin) r = r.filter((p) => p.amount >= Number(payFilter.amountMin));
+    if (payFilter.amountMax) r = r.filter((p) => p.amount <= Number(payFilter.amountMax));
+    r.sort((a, b) => {
+      const dir = payFilter.sortDir === 'desc' ? -1 : 1;
+      if (payFilter.sortBy === 'amount') return dir * (a.amount - b.amount);
+      return dir * (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    });
+    return r;
+  }, [payments, payFilter]);
 
   // ── Form items ─────────────────────────────────────────────────────────────
   const addItem = () => setItems([...items, { productId: '', quantity: 1, price: 0, taxRate: '10%' }]);
@@ -226,7 +271,8 @@ export default function Invoices() {
   const submitPayment = async () => {
     try {
       await api.post('/payments', { invoiceId: payModal.id, amount: Number(payAmount) });
-      setPayModal(null); setPayAmount(''); load();
+      setPayModal(null); setPayAmount('');
+      await Promise.all([load(), loadPayments(), loadCustomers()]);
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
 
@@ -444,10 +490,29 @@ export default function Invoices() {
           <button className="btn ghost" onClick={() => { setBatchResult(null); batchFileRef.current?.click(); }} disabled={batchLoading}>
             {batchLoading ? '⏳ Đang xử lý...' : '📦 Import batch XML'}
           </button>
-          <button className="btn cyan" onClick={() => { setOpen(!open); setShowNewCustomer(false); }}>+ Tạo hóa đơn</button>
+          <button className="btn cyan" onClick={() => { setTab('list'); setOpen(!open); setShowNewCustomer(false); }}>+ Tạo hóa đơn</button>
         </div>
       </div>
 
+      {/* ── Tab selector ── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        <button
+          className={`btn ${tab === 'list' ? 'cyan' : 'ghost'}`}
+          style={{ flex: '1 1 auto', borderRadius: 4 }}
+          onClick={() => setTab('list')}
+        >
+          🧾 Danh sách hóa đơn
+        </button>
+        <button
+          className={`btn ${tab === 'payments' ? 'cyan' : 'ghost'}`}
+          style={{ flex: '1 1 auto', borderRadius: 4 }}
+          onClick={() => setTab('payments')}
+        >
+          💰 Lịch sử thu tiền {payments.length > 0 && <span style={{ opacity: 0.6 }}>({payments.length})</span>}
+        </button>
+      </div>
+
+      {tab === 'list' && (<>
       {/* Batch result banner */}
       {batchResult && (
         <div style={{ padding: '10px 14px', marginBottom: 12, borderRadius: 6, background: batchResult.failed.length ? 'rgba(255,80,80,0.08)' : 'rgba(0,255,128,0.08)', border: `1px solid ${batchResult.failed.length ? 'rgba(255,80,80,0.3)' : 'rgba(0,255,128,0.3)'}`, fontSize: 13 }}>
@@ -644,6 +709,82 @@ export default function Invoices() {
           </tbody>
         </table>
       </div>
+      </>)}
+
+      {/* ══════════════ TAB: PAYMENTS ══════════════ */}
+      {tab === 'payments' && (
+        <>
+          <FilterBar
+            value={payFilter} onChange={setPayFilter}
+            totalCount={payments.length} resultCount={filteredPayments.length}
+            searchPlaceholder="Tìm KH, mã HĐ, HĐĐT..."
+            sortOptions={[
+              { value: 'date_desc',   label: '↓ Ngày mới nhất' },
+              { value: 'date_asc',    label: '↑ Ngày cũ nhất' },
+              { value: 'amount_desc', label: '↓ Tiền nhiều nhất' },
+              { value: 'amount_asc',  label: '↑ Tiền ít nhất' },
+            ]}
+          />
+
+          <div className="table-wrap">
+            <table className="nt">
+              <thead><tr>
+                <th>Ngày thu</th>
+                <th>Khách hàng</th>
+                <th>Hóa đơn</th>
+                <th>Số tiền thu</th>
+                <th>Phương thức</th>
+                <th>Ghi chú</th>
+                <th></th>
+              </tr></thead>
+              <tbody>
+                {filteredPayments.length === 0 && (
+                  <tr className="empty-row"><td colSpan={7}>
+                    <EmptyState
+                      icon="💰"
+                      title={payments.length === 0 ? 'Chưa có phiếu thu nào' : 'Không tìm thấy kết quả'}
+                      description={payments.length === 0 ? 'Mỗi lần kế toán bấm "Thu tiền" trên hóa đơn sẽ tự động ghi vào đây.' : 'Thử thay đổi từ khóa hoặc bộ lọc.'}
+                    />
+                  </td></tr>
+                )}
+                {filteredPayments.map((p) => {
+                  const invCancelled = p.invoice?.status === 'cancelled';
+                  return (
+                    <tr key={p.id}>
+                      <td className="c-dim" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                        {new Date(p.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                      </td>
+                      <td>
+                        <div className="c-bright fw7">{p.customer?.name || '—'}</div>
+                        {p.customer?.companyName && <div className="c-dim" style={{ fontSize: 10 }}>{p.customer.companyName}</div>}
+                      </td>
+                      <td>
+                        {p.invoice ? (
+                          <>
+                            <div className="c-cyan" style={{ fontSize: 12 }}>{p.invoice.code}</div>
+                            {p.invoice.eInvoiceCode && <div style={{ fontSize: 10, color: 'var(--yellow)' }}>HĐĐT: {p.invoice.eInvoiceCode}</div>}
+                            {invCancelled && <span className="tag red" style={{ marginTop: 3, fontSize: 9 }}>HĐ đã hủy</span>}
+                          </>
+                        ) : <span className="c-dim">—</span>}
+                      </td>
+                      <td className="c-green fw7">{fmt(p.amount)}</td>
+                      <td>
+                        <span className={`tag ${p.method === 'transfer' ? 'cyan' : 'yellow'}`}>
+                          {p.method === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}
+                        </span>
+                      </td>
+                      <td className="c-dim" style={{ fontSize: 11, maxWidth: 220 }}>{p.note || '—'}</td>
+                      <td>
+                        <button className="btn red btn-sm" onClick={() => setConfirmUndoPay(p)}>↶ Hoàn tác</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       {/* ── Confirm modals ── */}
       {confirmModal?.type === 'cancel' && (
@@ -664,6 +805,18 @@ export default function Invoices() {
           confirmLabel="Xóa vĩnh viễn"
           onConfirm={() => doDelete(confirmModal.inv)}
           onCancel={() => setConfirmModal(null)}
+        />
+      )}
+
+      {/* ── Hoàn tác phiếu thu ── */}
+      {confirmUndoPay && (
+        <ConfirmModal
+          title="Hoàn tác phiếu thu"
+          message={`Bạn có chắc muốn hoàn tác khoản thu ${fmt(confirmUndoPay.amount)} của hóa đơn ${confirmUndoPay.invoice?.code ?? '—'}?`}
+          warning="Số tiền sẽ được trừ khỏi đã thu, công nợ khách hàng tăng lại, và bút toán thu chi tương ứng sẽ bị xóa."
+          confirmLabel="↶ Hoàn tác"
+          onConfirm={() => doUndoPayment(confirmUndoPay)}
+          onCancel={() => setConfirmUndoPay(null)}
         />
       )}
 

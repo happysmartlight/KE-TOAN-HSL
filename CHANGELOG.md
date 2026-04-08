@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Tính năng mới
+
+#### Hóa đơn — Tab "Lịch sử thu tiền" + Hoàn tác phiếu thu
+- Trang `/invoices` thêm tab thứ 2: 💰 Lịch sử thu tiền (kèm count badge)
+- Mỗi lần kế toán bấm "Thu tiền" trên hóa đơn → tự ghi vào lịch sử (ngày, KH, mã HĐ + HĐĐT, số tiền, phương thức, ghi chú)
+- Nút **↶ Hoàn tác** trên mỗi dòng → đảo ngược toàn bộ side effects qua transaction:
+  - Trừ `paidAmount` của hóa đơn, tự recompute status (`paid`/`partial`/`unpaid`)
+  - Tăng lại công nợ KH (skip nếu hóa đơn đã hủy)
+  - Xóa cashflow income tương ứng (`refType=payment`)
+  - Xóa payment record
+- Backend: `DELETE /payments/:id` — `paymentService.delete()` chạy trong `$transaction`
+- ConfirmModal cảnh báo trước khi hoàn tác
+
 ### Sửa lỗi
 
 #### Update Check — newCommits không hiển thị

@@ -22,4 +22,15 @@ export const paymentController = {
       res.status(400).json({ error: err.message });
     }
   },
+
+  async delete(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      if (!id) return res.status(400).json({ error: 'ID không hợp lệ' });
+      const result = await paymentService.delete(id);
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  },
 };

@@ -5,3 +5,4 @@ export const paymentRouter = Router();
 
 paymentRouter.get('/', paymentController.getAll);
 paymentRouter.post('/', paymentController.create);
+paymentRouter.delete('/:id', paymentController.delete);

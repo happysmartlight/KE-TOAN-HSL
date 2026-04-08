@@ -68,4 +68,56 @@ export const paymentService = {
 
     return payment;
   },
+
+  /**
+   * Hoàn tác (xóa) một payment + đảo ngược toàn bộ hậu quả:
+   *  - Trừ paidAmount của hóa đơn, recompute status
+   *  - Tăng lại công nợ khách hàng (nếu hóa đơn không bị hủy)
+   *  - Xóa cashflow income tương ứng
+   */
+  async delete(id: number) {
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: { invoice: true },
+    });
+    if (!payment) throw new Error('Không tìm thấy phiếu thu');
+    if (!payment.invoice) throw new Error('Hóa đơn của phiếu thu không tồn tại');
+
+    return prisma.$transaction(async (tx) => {
+      const newPaidAmount = Math.max(0, payment.invoice!.paidAmount - payment.amount);
+      const recomputed =
+        newPaidAmount >= payment.invoice!.totalAmount && payment.invoice!.totalAmount > 0
+          ? 'paid'
+          : newPaidAmount > 0
+          ? 'partial'
+          : 'unpaid';
+
+      // Hóa đơn đã hủy → giữ status 'cancelled', không revert
+      const finalStatus = payment.invoice!.status === 'cancelled' ? 'cancelled' : recomputed;
+
+      await tx.invoice.update({
+        where: { id: payment.invoiceId },
+        data: { paidAmount: newPaidAmount, status: finalStatus },
+      });
+
+      // Tăng lại công nợ KH (chỉ khi hóa đơn không bị hủy — nếu hủy thì
+      // debt đã được decrement khi cancel, không cần tăng lại)
+      if (payment.invoice!.status !== 'cancelled') {
+        await tx.customer.update({
+          where: { id: payment.customerId },
+          data: { debt: { increment: payment.amount } },
+        });
+      }
+
+      // Xóa cashflow tương ứng (refType='payment', refId=payment.id)
+      await tx.cashflow.deleteMany({
+        where: { refType: 'payment', refId: payment.id },
+      });
+
+      // Xóa payment record
+      await tx.payment.delete({ where: { id: payment.id } });
+
+      return { ok: true };
+    });
+  },
 };
