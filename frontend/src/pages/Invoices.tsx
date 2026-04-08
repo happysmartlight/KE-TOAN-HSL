@@ -117,7 +117,7 @@ export default function Invoices() {
   const [items, setItems]         = useState([{ productId: '', quantity: 1, price: 0, taxRate: '10%' }]);
   const [payModal, setPayModal]   = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
-  const [payMethod, setPayMethod] = useState<'cash' | 'transfer'>('cash');
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer'>('transfer');
   const [confirmModal, setConfirmModal] = useState<null | { type: 'cancel' | 'delete'; inv: any }>(null);
   const [detailInv, setDetailInv] = useState<any>(null);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
@@ -272,7 +272,7 @@ export default function Invoices() {
   const submitPayment = async () => {
     try {
       await api.post('/payments', { invoiceId: payModal.id, amount: Number(payAmount), method: payMethod });
-      setPayModal(null); setPayAmount(''); setPayMethod('cash');
+      setPayModal(null); setPayAmount(''); setPayMethod('transfer');
       await Promise.all([load(), loadPayments(), loadCustomers()]);
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
@@ -855,7 +855,7 @@ export default function Invoices() {
 
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
-              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); setPayMethod('cash'); }}>[ Hủy ]</button>
+              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); setPayMethod('transfer'); }}>[ Hủy ]</button>
             </div>
           </div>
         </div>
