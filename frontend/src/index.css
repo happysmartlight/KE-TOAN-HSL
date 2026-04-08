@@ -322,11 +322,12 @@ html,body,#root{
   background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0.3;
 }
 
-.grid-6{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
-.grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
-.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
-.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+.grid-6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.grid-5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.grid-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:16px}
+.grid-6 > *, .grid-5 > *, .grid-4 > *, .grid-3 > *, .grid-2 > *{min-width:0}
 .mb-16{margin-bottom:16px}
 .mb-12{margin-bottom:12px}
 
