@@ -273,7 +273,9 @@ export default function Users() {
       <div className="table-wrap">
         <table className="nt">
           <thead><tr>
-            <th>Username</th><th>Họ tên</th><th>Vai trò</th>
+            <th>Username</th>
+            <th style={{ minWidth: 220, width: '22%' }}>Họ tên</th>
+            <th>Vai trò</th>
             <th>Liên hệ</th><th>Ngày vào làm</th><th>Trạng thái</th><th></th>
           </tr></thead>
           <tbody>

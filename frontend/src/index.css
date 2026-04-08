@@ -700,13 +700,26 @@ select.inp option{background:var(--bg-card);color:var(--text)}
   input.inp,select.inp,textarea.inp { font-size:16px }
 
   /* Product dashboard tab — phone tweaks */
-  .product-dashboard .form-panel { padding:11px 12px !important }
+  .product-dashboard .form-panel { padding:11px 12px !important; min-width:0; overflow:hidden }
   .product-dashboard .form-panel > div:first-child { font-size:10px !important }
   .product-dashboard .pd-summary-card { padding:12px 12px !important }
   .product-dashboard .pd-summary-icon { font-size:18px !important;margin-bottom:6px !important }
   .product-dashboard .pd-summary-value { font-size:17px !important }
   .product-dashboard .pd-summary-label { font-size:10px !important }
   .product-dashboard .pd-summary-sub { font-size:9px !important }
+  /* Cho phép tên sản phẩm wrap xuống hàng thay vì ellipsis 1 dòng,
+     tránh panel bị phình ngang khi tên quá dài trên mobile */
+  .product-dashboard .form-panel span[style*="white-space: nowrap"],
+  .product-dashboard .form-panel div[style*="white-space: nowrap"] {
+    white-space:normal !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+    word-break:break-word;
+    overflow-wrap:anywhere;
+    line-height:1.3;
+  }
+  /* Grid-3 children trong product dashboard cần min-width:0 để không overflow */
+  .product-dashboard .grid-3 > * { min-width:0 }
 }
 
 /* ═══════════════════════════════════════

@@ -1,5 +1,45 @@
 # Changelog
 
+## [Unreleased]
+
+### Sửa lỗi
+
+#### Admin — Seed demo & purge dữ liệu (MariaDB)
+- **Lỗi `P2002 User_username_key`**: dùng `upsert` thay `create` cho toàn bộ user seed → idempotent, chạy lại nhiều lần không báo trùng
+- **Lỗi `P2003 Foreign key constraint`** khi `product.deleteMany()` / `supplierPayment.create()`: bọc block purge (cả trong `seedDemoData` và `admin.purgeAll()` / `resetForProduction`) trong `SET FOREIGN_KEY_CHECKS = 0 … 1` để xóa sạch orphan rows từ lần seed fail trước
+- Bỏ `$transaction` trong `purgeAll` vì `FOREIGN_KEY_CHECKS` là session-scoped — phải chạy trên cùng 1 connection
+
+#### CI — vitest version.test.ts
+- Fix `ReferenceError: __APP_VERSION__ is not defined` trên CI: mirror Vite's `define` trong `vitest.config.ts` để inject version từ `package.json`
+
+#### Git — Runtime config files
+- Untrack `backend/prisma/rank-config.json` + `backup-config.json` khỏi repo (2 file này do admin UI tự generate khi save lần đầu) → server không còn bị block khi `git pull`
+
+### Cải tiến
+
+#### Admin — Demo seed & Reset panel
+- Chuyển seed logic sang `backend/src/seed/seed-demo.ts` (có thể import từ admin runtime, không chỉ từ CLI)
+- Thêm 2 endpoint `POST /admin/seed-demo` và `POST /admin/reset-production` — giữ nguyên admin đang đăng nhập để không bị logout
+- Trang `/system-admin`: thêm form-panel với 2 nút "Chạy dữ liệu demo" (typeToConfirm `DEMO`) và "Reset để sử dụng thực tế" (typeToConfirm `BAT DAU`)
+
+#### Frontend — Version sync từ package.json
+- `vite.config.ts` inject `__APP_VERSION__` qua `define` từ `package.json` → màn hình login luôn hiển thị đúng version (trước đây hardcode trong `src/version.ts`)
+
+#### UI — Table column width (Users & Products)
+- Cột "Họ tên" ở `/users` → `minWidth: 220px, width: 22%` (giảm wrap xuống nhiều hàng)
+- Cột "Tên SP" ở `/products` → `minWidth: 280px, width: 28%` (phù hợp tên LED dài)
+
+#### UI — Products page "+ Thêm mới" button
+- Nút "+ Thêm mới" giờ hiển thị ở cả 2 tab (Danh sách + Phân tích) → tránh giao diện thụt lên thụt xuống khi chuyển tab
+- Click nút ở tab Phân tích tự chuyển về tab Danh sách rồi mở form
+
+#### UI — Products Dashboard mobile responsive
+- Fix panel "🔥 Bán chạy", "⚠️ Tồn kho thấp", "😴 Không bán" bị phình rộng quá viewport trên mobile
+- Thêm `min-width: 0; overflow: hidden` cho `.form-panel` + override `white-space: nowrap` → tên sản phẩm dài wrap xuống hàng thay vì ellipsis
+- Ép `min-width: 0` cho grid-3 children để chặn flex/grid content overflow
+
+---
+
 ## [0.3.6] — 2026-04-07
 
 ### Tính năng mới

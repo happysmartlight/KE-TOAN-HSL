@@ -459,9 +459,12 @@ export default function Products() {
     <div>
       <div className="page-header">
         <h1 className="page-title">Sản phẩm</h1>
-        {tab === 'list' && (
-          <button className="btn cyan" onClick={openNew}>+ Thêm mới</button>
-        )}
+        <button
+          className="btn cyan"
+          onClick={() => { if (tab !== 'list') setTab('list'); openNew(); }}
+        >
+          + Thêm mới
+        </button>
       </div>
 
       {/* ── Tab selector ── */}
@@ -553,7 +556,8 @@ export default function Products() {
             <table className="nt">
               <thead>
                 <tr>
-                  <th>Tên SP</th><th>SKU</th><th>ĐVT</th>
+                  <th style={{ minWidth: 280, width: '28%' }}>Tên SP</th>
+                  <th>SKU</th><th>ĐVT</th>
                   <th>Giá vốn</th><th>Giá bán</th><th>VAT</th>
                   <th>Đã bán</th><th>Tồn kho</th><th></th>
                 </tr>
