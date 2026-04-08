@@ -155,14 +155,14 @@ function TailscaleWizard({ info, getUrl }: {
     const url = getUrl(connectedIP);
     return (
       <>
-        <div style={{ fontSize: 12, color: 'var(--green)', marginBottom: 12, fontWeight: 700 }}>
-          ✓ Đã kết nối Tailscale
-          <span style={{ fontFamily: 'monospace', color: 'var(--text-dim)', fontWeight: 400, marginLeft: 8 }}>
-            {connectedIP}
-          </span>
-        </div>
         <CopyBox url={url} />
         <QRPanel url={url} />
+        <div style={{ fontSize: 12, color: 'var(--green)', marginTop: 12, fontWeight: 700, textAlign: 'center' }}>
+          ✓ Đã kết nối Tailscale
+          <div style={{ fontFamily: 'monospace', color: 'var(--text-dim)', fontWeight: 400, marginTop: 4, fontSize: 11 }}>
+            {connectedIP}
+          </div>
+        </div>
       </>
     );
   }
@@ -400,6 +400,9 @@ export default function NetworkSetup() {
       {!loading && info && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+          {/* ── 1 + 2 + 3: 3 cột ngang trên desktop, stack mobile ── */}
+          <div className="network-access-grid">
+
           {/* ── 1. Kiểm tra hệ thống ── */}
           <div className="form-panel" style={{ padding: '16px 18px' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--text-dim)', marginBottom: 14 }}>
@@ -450,8 +453,7 @@ export default function NetworkSetup() {
             )}
           </div>
 
-          {/* ── 2 + 3. LAN + Tailscale (2 cột ngang trên desktop) ── */}
-          <div className="network-access-grid">
+          {/* ── 2. LAN Access ── */}
           <div className="form-panel" style={{ padding: '16px 18px' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--text-dim)', marginBottom: 14 }}>
               📱 Truy cập nội bộ (LAN)
