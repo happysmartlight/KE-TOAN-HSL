@@ -48,14 +48,17 @@ function CopyBox({ url }: { url: string }) {
       });
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
       background: 'rgba(0,245,255,0.04)', border: '1px solid rgba(0,245,255,0.2)',
       borderRadius: 4, padding: '10px 12px',
     }}>
-      <span style={{ flex: 1, fontFamily: 'monospace', fontSize: 13, color: 'var(--cyan)', wordBreak: 'break-all' }}>
+      <span style={{
+        fontFamily: 'monospace', fontSize: 13, color: 'var(--cyan)',
+        wordBreak: 'break-all', textAlign: 'center', width: '100%',
+      }}>
         {url}
       </span>
-      <button className="btn cyan btn-sm" onClick={copy} style={{ flexShrink: 0, minWidth: 76 }}>
+      <button className="btn cyan btn-sm" onClick={copy} style={{ minWidth: 96 }}>
         {copied ? '✓ Đã copy' : '📋 Copy'}
       </button>
     </div>
@@ -64,7 +67,7 @@ function CopyBox({ url }: { url: string }) {
 
 function QRPanel({ url, label }: { url: string; label?: string }) {
   return (
-    <div style={{ marginTop: 12 }}>
+    <div style={{ marginTop: 12, display: 'flex', justifyContent: 'center' }}>
       <div style={{
         display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
         gap: 8, padding: 12, background: '#fff', borderRadius: 6,
