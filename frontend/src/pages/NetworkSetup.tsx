@@ -398,7 +398,7 @@ export default function NetworkSetup() {
       )}
 
       {!loading && info && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
           {/* ── 1. Kiểm tra hệ thống ── */}
           <div className="form-panel" style={{ padding: '16px 18px' }}>
@@ -450,7 +450,8 @@ export default function NetworkSetup() {
             )}
           </div>
 
-          {/* ── 2. LAN Access ── */}
+          {/* ── 2 + 3. LAN + Tailscale (2 cột ngang trên desktop) ── */}
+          <div className="network-access-grid">
           <div className="form-panel" style={{ padding: '16px 18px' }}>
             <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: 'var(--text-dim)', marginBottom: 14 }}>
               📱 Truy cập nội bộ (LAN)
@@ -487,6 +488,7 @@ export default function NetworkSetup() {
               🌍 Truy cập từ xa (Tailscale)
             </div>
             <TailscaleWizard info={info} getUrl={getUrl} />
+          </div>
           </div>
 
           {/* ── 4. Security ── */}

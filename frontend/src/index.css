@@ -328,6 +328,17 @@ html,body,#root{
 .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
 .grid-2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-bottom:16px}
 .grid-6 > *, .grid-5 > *, .grid-4 > *, .grid-3 > *, .grid-2 > *{min-width:0}
+
+/* Network setup — LAN + Tailscale side-by-side trên desktop, stack trên mobile */
+.network-access-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+}
+.network-access-grid > *{min-width:0}
+@media (max-width:768px){
+  .network-access-grid{grid-template-columns:1fr}
+}
 .mb-16{margin-bottom:16px}
 .mb-12{margin-bottom:12px}
 
