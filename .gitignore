@@ -22,3 +22,9 @@ frontend/dist/
 # PM2 logs
 logs/
 *.log
+
+# Runtime config files (auto-generated/edited qua UI, không commit)
+backend/prisma/rank-config.json
+backend/prisma/backup-config.json
+backend/prisma/imgui.ini
+backend/prisma/dev.db.pre-restore-*

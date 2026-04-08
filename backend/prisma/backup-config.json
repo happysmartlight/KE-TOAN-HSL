@@ -1,7 +1,0 @@
-{
-  "enabled": true,
-  "schedule": "0 2 * * *",
-  "keepCount": 7,
-  "encrypt": true,
-  "password": ""
-}
