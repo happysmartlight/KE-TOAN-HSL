@@ -4,6 +4,10 @@
 
 ### Sửa lỗi
 
+#### Update Check — newCommits không hiển thị
+- Thay `git log -z --pretty=format:%h %B` bằng marker rõ ràng (`<<<__COMMIT_END__>>>`) để parse commit log
+- Lý do: `-z` dùng NUL byte làm separator, có thể bị shell/exec buffer bỏ qua trong vài môi trường → danh sách "📝 thay đổi mới" không xuất hiện dù có commit mới
+
 #### Admin — Seed demo & purge dữ liệu (MariaDB)
 - **Lỗi `P2002 User_username_key`**: dùng `upsert` thay `create` cho toàn bộ user seed → idempotent, chạy lại nhiều lần không báo trùng
 - **Lỗi `P2003 Foreign key constraint`** khi `product.deleteMany()` / `supplierPayment.create()`: bọc block purge (cả trong `seedDemoData` và `admin.purgeAll()` / `resetForProduction`) trong `SET FOREIGN_KEY_CHECKS = 0 … 1` để xóa sạch orphan rows từ lần seed fail trước

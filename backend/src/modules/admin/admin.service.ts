@@ -564,17 +564,19 @@ export const adminService = {
 
       // ── BƯỚC 2: CI pass (hoặc unknown) → fetch commit info ───────────
       await _run(`git -C "${PROJECT_ROOT}" fetch origin master`);
+      // Marker rõ ràng giữa các commit để parse robust hơn -z (vốn dễ bị
+      // shell/buffer ăn NUL bytes trong vài môi trường).
+      const COMMIT_SEP = '<<<__COMMIT_END__>>>';
       const [current, remote, countStr, newLog, currentMsg] = await Promise.all([
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short HEAD`),
         _run(`git -C "${PROJECT_ROOT}" rev-parse --short origin/master`),
         _run(`git -C "${PROJECT_ROOT}" rev-list HEAD..origin/master --count`),
-        // -z: record separator = NUL; format: short hash + space + full body (%B giữ nguyên xuống dòng)
-        _run(`git -C "${PROJECT_ROOT}" log HEAD..origin/master -z --pretty=format:%h %B`).catch(() => ''),
+        _run(`git -C "${PROJECT_ROOT}" log HEAD..origin/master --pretty=format:"%h %B${COMMIT_SEP}"`).catch(() => ''),
         _run(`git -C "${PROJECT_ROOT}" log HEAD -1 --pretty=format:%B`).catch(() => ''),
       ]);
       const commitsBehind = parseInt(countStr, 10) || 0;
       const newCommits = newLog
-        ? newLog.split('\0').map((s) => s.trim()).filter(Boolean)
+        ? newLog.split(COMMIT_SEP).map((s) => s.trim()).filter(Boolean)
         : [];
       _updateState = {
         phase: commitsBehind > 0 ? 'update_available' : 'up_to_date',
