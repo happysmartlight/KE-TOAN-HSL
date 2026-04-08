@@ -118,6 +118,19 @@ export default function Invoices() {
   const [payModal, setPayModal]   = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer'>('transfer');
+  const [payNote, setPayNote]     = useState('');
+
+  const openPayModal = (inv: any) => {
+    const remaining = inv.totalAmount - (inv.paidAmount || 0);
+    setPayModal(inv);
+    setPayAmount(String(remaining));
+    setPayMethod('transfer');
+    setPayNote(`Thanh toán hóa đơn ${inv.code}${inv.customer?.name ? ` — ${inv.customer.name}` : ''}`);
+  };
+
+  const closePayModal = () => {
+    setPayModal(null); setPayAmount(''); setPayMethod('transfer'); setPayNote('');
+  };
   const [confirmModal, setConfirmModal] = useState<null | { type: 'cancel' | 'delete'; inv: any }>(null);
   const [detailInv, setDetailInv] = useState<any>(null);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
@@ -150,7 +163,7 @@ export default function Invoices() {
   // ESC: đóng modal/panel trong → ngoài (sau tất cả useState)
   useEscKey(
     detailInv       ? () => setDetailInv(null) :
-    payModal        ? () => { setPayModal(null); setPayAmount(''); } :
+    payModal        ? closePayModal :
     confirmUndoPay  ? () => setConfirmUndoPay(null) :
     showNewCustomer ? () => setShowNewCustomer(false) :
     open            ? () => setOpen(false) : null
@@ -271,8 +284,13 @@ export default function Invoices() {
   // ── Payment ────────────────────────────────────────────────────────────────
   const submitPayment = async () => {
     try {
-      await api.post('/payments', { invoiceId: payModal.id, amount: Number(payAmount), method: payMethod });
-      setPayModal(null); setPayAmount(''); setPayMethod('transfer');
+      await api.post('/payments', {
+        invoiceId: payModal.id,
+        amount: Number(payAmount),
+        method: payMethod,
+        note: payNote.trim() || undefined,
+      });
+      closePayModal();
       await Promise.all([load(), loadPayments(), loadCustomers()]);
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
@@ -695,7 +713,7 @@ export default function Invoices() {
                   <td><div className="td-act">
                     <button className="btn ghost btn-sm" onClick={() => setDetailInv(inv)}>Chi tiết</button>
                     {!isCancelled && inv.status !== 'paid' && (
-                      <button className="btn green btn-sm" onClick={() => { setPayModal(inv); setPayAmount(String(remaining)); }}>Thu tiền</button>
+                      <button className="btn green btn-sm" onClick={() => openPayModal(inv)}>Thu tiền</button>
                     )}
                     {isAdmin && !isCancelled && (
                       <button className="btn red btn-sm" onClick={() => setConfirmModal({ type: 'cancel', inv })}>Hủy</button>
@@ -831,7 +849,26 @@ export default function Invoices() {
               <span className="c-red fw7">{fmt(payModal.totalAmount - payModal.paidAmount)}</span>
             </div>
             <label className="lbl">Số tiền thu</label>
-            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
+            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 6 }} />
+            {/* Quick percentage shortcuts */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              {[25, 50, 70, 100].map((pct) => {
+                const remaining = payModal.totalAmount - (payModal.paidAmount || 0);
+                const target = Math.round((remaining * pct) / 100);
+                const active = Number(payAmount) === target;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    className={`btn btn-sm ${active ? 'cyan' : 'ghost'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => setPayAmount(String(target))}
+                  >
+                    {pct === 100 ? 'Tất cả' : `${pct}%`}
+                  </button>
+                );
+              })}
+            </div>
 
             <label className="lbl">Phương thức thanh toán</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -853,9 +890,18 @@ export default function Invoices() {
               </button>
             </div>
 
+            <label className="lbl">Ghi chú</label>
+            <input
+              className="inp"
+              value={payNote}
+              onChange={(e) => setPayNote(e.target.value)}
+              placeholder="Ghi chú cho phiếu thu..."
+              style={{ marginBottom: 14 }}
+            />
+
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
-              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); setPayMethod('transfer'); }}>[ Hủy ]</button>
+              <button className="btn ghost" onClick={closePayModal}>[ Hủy ]</button>
             </div>
           </div>
         </div>

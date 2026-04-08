@@ -26,7 +26,21 @@ export default function Purchases() {
   const [payModal, setPayModal]   = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payMethod, setPayMethod] = useState<'cash' | 'transfer'>('transfer');
+  const [payNote, setPayNote]     = useState('');
   const [confirmCancel, setConfirmCancel] = useState<any>(null);
+
+  // Mở modal trả tiền — set default amount + note
+  const openPayModal = (po: any) => {
+    const remaining = po.totalAmount - (po.paidAmount || 0);
+    setPayModal(po);
+    setPayAmount(String(remaining));
+    setPayMethod('transfer');
+    setPayNote(`Thanh toán đơn nhập ${po.code}${po.supplier?.name ? ` — ${po.supplier.name}` : ''}`);
+  };
+
+  const closePayModal = () => {
+    setPayModal(null); setPayAmount(''); setPayMethod('transfer'); setPayNote('');
+  };
 
   // Tab + history
   const [tab, setTab] = useState<'list' | 'payments'>('list');
@@ -35,7 +49,7 @@ export default function Purchases() {
   const [confirmUndoPay, setConfirmUndoPay] = useState<any>(null);
 
   useEscKey(
-    payModal       ? () => { setPayModal(null); setPayAmount(''); setPayMethod('transfer'); } :
+    payModal       ? closePayModal :
     confirmUndoPay ? () => setConfirmUndoPay(null) :
     confirmCancel  ? () => setConfirmCancel(null) :
     open           ? () => setOpen(false) : null
@@ -141,8 +155,9 @@ export default function Purchases() {
         purchaseOrderId: payModal.id,
         amount: Number(payAmount),
         method: payMethod,
+        note: payNote.trim() || undefined,
       });
-      setPayModal(null); setPayAmount(''); setPayMethod('transfer');
+      closePayModal();
       toast.success('Đã thanh toán');
       await Promise.all([load(), loadPayments(), api.get('/suppliers').then((r) => setSuppliers(r.data))]);
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
@@ -311,7 +326,7 @@ export default function Purchases() {
                 <td className="c-dim">{new Date(p.createdAt).toLocaleDateString('vi-VN')}</td>
                 <td><div className="td-act">
                   {!isCancelled && p.status !== 'paid' && (
-                    <button className="btn green btn-sm" onClick={() => { setPayModal(p); setPayAmount(String(remaining)); }}>Trả tiền</button>
+                    <button className="btn green btn-sm" onClick={() => openPayModal(p)}>Trả tiền</button>
                   )}
                   {isAdmin && !isCancelled && (
                     <button className="btn red btn-sm" onClick={() => setConfirmCancel(p)}>Hủy</button>
@@ -423,7 +438,26 @@ export default function Purchases() {
               <span className="c-red fw7">{fmt(payModal.totalAmount - (payModal.paidAmount || 0))}</span>
             </div>
             <label className="lbl">Số tiền trả</label>
-            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
+            <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 6 }} />
+            {/* Quick percentage shortcuts */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              {[25, 50, 70, 100].map((pct) => {
+                const remaining = payModal.totalAmount - (payModal.paidAmount || 0);
+                const target = Math.round((remaining * pct) / 100);
+                const active = Number(payAmount) === target;
+                return (
+                  <button
+                    key={pct}
+                    type="button"
+                    className={`btn btn-sm ${active ? 'cyan' : 'ghost'}`}
+                    style={{ flex: 1 }}
+                    onClick={() => setPayAmount(String(target))}
+                  >
+                    {pct === 100 ? 'Tất cả' : `${pct}%`}
+                  </button>
+                );
+              })}
+            </div>
 
             <label className="lbl">Phương thức thanh toán</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -445,9 +479,18 @@ export default function Purchases() {
               </button>
             </div>
 
+            <label className="lbl">Ghi chú</label>
+            <input
+              className="inp"
+              value={payNote}
+              onChange={(e) => setPayNote(e.target.value)}
+              placeholder="Ghi chú cho phiếu chi..."
+              style={{ marginBottom: 14 }}
+            />
+
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
-              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); setPayMethod('transfer'); }}>[ Hủy ]</button>
+              <button className="btn ghost" onClick={closePayModal}>[ Hủy ]</button>
             </div>
           </div>
         </div>
