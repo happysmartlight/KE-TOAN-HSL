@@ -2,28 +2,28 @@
   "customer": [
     {
       "label": "THÁCH ĐẤU",
-      "min": 100000000,
+      "min": 300000000,
       "icon": "⚔️",
       "color": "#ff2244",
       "glow": "#ff003344"
     },
     {
       "label": "KIM CƯƠNG",
-      "min": 40000000,
+      "min": 200000000,
       "icon": "💎",
       "color": "#00d4ff",
       "glow": "#00aaff44"
     },
     {
       "label": "BẠCH KIM",
-      "min": 20000000,
+      "min": 100000000,
       "icon": "🔮",
       "color": "#bf80ff",
       "glow": "#9944ff44"
     },
     {
       "label": "VÀNG",
-      "min": 10000000,
+      "min": 70000000,
       "icon": "⭐",
       "color": "#ffcc00",
       "glow": "#ffaa0044"
