@@ -228,7 +228,7 @@ export default function Suppliers() {
 
       <div className="table-wrap">
         <table className="nt">
-          <thead><tr><th>Tên NCC</th><th>Loại</th><th>MST / Công ty</th><th>Điện thoại</th><th>Tổng đặt</th><th>Đang nợ</th><th></th></tr></thead>
+          <thead><tr><th>Tên NCC</th><th style={{ minWidth: 100, whiteSpace: 'nowrap' }}>Loại</th><th>MST / Công ty</th><th>Điện thoại</th><th>Tổng đặt</th><th>Đang nợ</th><th></th></tr></thead>
           <tbody>
             {loading ? Array.from({ length: 5 }).map((_, i) => (
               <tr key={i} className="skeleton-row">
@@ -263,7 +263,7 @@ export default function Suppliers() {
                     </div>
                   </div>
                 </td>
-                <td><span className={`tag ${s.supplierType === 'international' ? 'purple' : s.supplierType === 'intermediary' ? 'yellow' : 'cyan'}`}>{typeLabel(s.supplierType)}</span></td>
+                <td style={{ whiteSpace: 'nowrap' }}><span className={`tag ${s.supplierType === 'international' ? 'purple' : s.supplierType === 'intermediary' ? 'yellow' : 'cyan'}`}>{typeLabel(s.supplierType)}</span></td>
                 <td>
                   {s.taxCode    && <div style={{ fontSize: 11, color: '#8898b8' }}>{s.taxCode}</div>}
                   {s.companyName && <div style={{ fontSize: 12 }}>{s.companyName}</div>}
