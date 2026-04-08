@@ -117,6 +117,7 @@ export default function Invoices() {
   const [items, setItems]         = useState([{ productId: '', quantity: 1, price: 0, taxRate: '10%' }]);
   const [payModal, setPayModal]   = useState<any>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<'cash' | 'transfer'>('cash');
   const [confirmModal, setConfirmModal] = useState<null | { type: 'cancel' | 'delete'; inv: any }>(null);
   const [detailInv, setDetailInv] = useState<any>(null);
   const [filter, setFilter] = useState<FilterState>(defaultFilter);
@@ -270,8 +271,8 @@ export default function Invoices() {
   // ── Payment ────────────────────────────────────────────────────────────────
   const submitPayment = async () => {
     try {
-      await api.post('/payments', { invoiceId: payModal.id, amount: Number(payAmount) });
-      setPayModal(null); setPayAmount('');
+      await api.post('/payments', { invoiceId: payModal.id, amount: Number(payAmount), method: payMethod });
+      setPayModal(null); setPayAmount(''); setPayMethod('cash');
       await Promise.all([load(), loadPayments(), loadCustomers()]);
     } catch (err: any) { toast.error(err?.response?.data?.error || 'Lỗi'); }
   };
@@ -831,9 +832,30 @@ export default function Invoices() {
             </div>
             <label className="lbl">Số tiền thu</label>
             <MoneyInput value={payAmount} onChange={(v) => setPayAmount(String(v))} style={{ marginBottom: 14 }} />
+
+            <label className="lbl">Phương thức thanh toán</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <button
+                type="button"
+                className={`btn ${payMethod === 'cash' ? 'yellow' : 'ghost'}`}
+                style={{ flex: 1 }}
+                onClick={() => setPayMethod('cash')}
+              >
+                💵 Tiền mặt
+              </button>
+              <button
+                type="button"
+                className={`btn ${payMethod === 'transfer' ? 'cyan' : 'ghost'}`}
+                style={{ flex: 1 }}
+                onClick={() => setPayMethod('transfer')}
+              >
+                🏦 Chuyển khoản
+              </button>
+            </div>
+
             <div className="form-actions">
               <button className="btn green" onClick={submitPayment}>[ Xác nhận ]</button>
-              <button className="btn ghost" onClick={() => setPayModal(null)}>[ Hủy ]</button>
+              <button className="btn ghost" onClick={() => { setPayModal(null); setPayAmount(''); setPayMethod('cash'); }}>[ Hủy ]</button>
             </div>
           </div>
         </div>
