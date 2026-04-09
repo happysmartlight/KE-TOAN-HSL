@@ -21,4 +21,24 @@ export const authController = {
       res.status(404).json({ error: err.message });
     }
   },
+
+  async getSetupStatus(_req: Request, res: Response) {
+    try {
+      res.json(await authService.getSetupStatus());
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  },
+
+  async setupFirstAdmin(req: Request, res: Response) {
+    try {
+      const { username, password, name } = req.body || {};
+      const result = await authService.setupFirstAdmin({ username, password, name }, req.ip);
+      res.json(result);
+    } catch (err: any) {
+      // 409 Conflict nếu đã có user (chống re-setup); 400 cho validation
+      const status = err?.alreadyInitialized ? 409 : 400;
+      res.status(status).json({ error: err.message });
+    }
+  },
 };

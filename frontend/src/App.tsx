@@ -21,6 +21,7 @@ import AutoBackup from './pages/AutoBackup';
 import MyProfile from './pages/MyProfile';
 import RankConfig from './pages/RankConfig';
 import Login from './pages/Login';
+import FirstRunSetup from './pages/FirstRunSetup';
 import NetworkSetup from './pages/NetworkSetup';
 import { setRankConfig } from './components/HoloCard';
 
@@ -58,7 +59,7 @@ const PAGE_NAMES: Record<string, string> = {
 };
 
 function AppLayout() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, needsSetup, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Load rank config after login (admin only — staff use defaults)
@@ -122,6 +123,9 @@ function AppLayout() {
     );
   }
 
+  // Lần chạy đầu (DB rỗng) → trang khởi tạo admin thay vì login.
+  // Sau khi setup thành công, AuthContext set user → branch dưới render Dashboard.
+  if (needsSetup) return <FirstRunSetup />;
   if (!user) return <Login />;
 
   const pageName = PAGE_NAMES[location.pathname] || location.pathname;

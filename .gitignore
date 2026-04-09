@@ -28,3 +28,9 @@ backend/prisma/rank-config.json
 backend/prisma/backup-config.json
 backend/prisma/imgui.ini
 backend/prisma/dev.db.pre-restore-*
+
+# Docker stack runtime data — bind mounts cho compose:
+#   data/prisma/  → schema, rank-config.json, backup-config.json
+#   data/backups/ → output của auto-backup cron
+data/
+.env.backup-*

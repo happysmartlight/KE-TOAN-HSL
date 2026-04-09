@@ -67,4 +67,76 @@ export const authService = {
     if (!user) throw new Error('Không tìm thấy người dùng');
     return user;
   },
+
+  /**
+   * First-run setup status — public endpoint.
+   * Frontend gọi lúc khởi động: nếu DB chưa có user nào → render trang FirstRunSetup
+   * thay vì Login. Một khi có user, endpoint này trả false vĩnh viễn.
+   */
+  async getSetupStatus() {
+    const count = await prisma.user.count();
+    return { needsSetup: count === 0 };
+  },
+
+  /**
+   * Tạo admin đầu tiên qua UI setup. Chỉ hoạt động khi DB hoàn toàn rỗng (không user nào).
+   *
+   * Bảo vệ:
+   *  - Validate password policy như mọi nơi khác (≥12 ký tự, 3/4 nhóm)
+   *  - Bcrypt hash NGOÀI transaction (250ms — không giữ lock DB)
+   *  - Wrap trong $transaction + recheck count==0 → chống race condition giữa 2 request đồng thời
+   *  - Trả token luôn để UX auto-login (giống Wordpress install)
+   *  - Throw có cờ `alreadyInitialized` để controller biết phải trả 409 thay vì 400
+   */
+  async setupFirstAdmin(
+    data: { username?: string; password?: string; name?: string },
+    ip?: string,
+  ) {
+    const username = (data?.username || '').trim();
+    const password = data?.password || '';
+    const name = (data?.name || '').trim() || 'Quản trị viên';
+
+    if (username.length < 3) {
+      throw new Error('Tên đăng nhập phải có ít nhất 3 ký tự');
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+      throw new Error('Tên đăng nhập chỉ chấp nhận chữ, số và các ký tự . _ -');
+    }
+    assertPasswordPolicy(password);
+
+    // Hash trước khi vào transaction để không giữ DB lock 250ms
+    const hashed = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+    const created = await prisma.$transaction(async (tx) => {
+      const count = await tx.user.count();
+      if (count > 0) {
+        const err: any = new Error('Hệ thống đã được khởi tạo, không thể chạy setup lại');
+        err.alreadyInitialized = true;
+        throw err;
+      }
+      return tx.user.create({
+        data: { username, password: hashed, name, role: 'admin' },
+      });
+    });
+
+    await writeLog({
+      userId:   created.id,
+      username: created.username,
+      action:   'setup',
+      module:   'auth',
+      message:  `First-run setup: tạo admin "${created.username}" qua UI`,
+      level:    'info',
+      ip,
+    });
+
+    // Auto-login: trả token + user — frontend lưu token và vào dashboard luôn
+    const token = signToken(
+      { id: created.id, username: created.username, role: created.role },
+      JWT_EXPIRES,
+    );
+    return {
+      token,
+      user: { id: created.id, username: created.username, name: created.name, role: created.role },
+    };
+  },
 };

@@ -14,10 +14,11 @@ Hệ thống kế toán nội bộ cho doanh nghiệp nhỏ.
 
 - [Tính năng](#tính-năng)
 - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+- [Cài đặt với Docker (khuyên dùng cho Pi/server)](#cài-đặt-với-docker-khuyên-dùng-cho-piserver)
 - [Cài đặt để phát triển (Dev mode)](#cài-đặt-để-phát-triển-dev-mode)
-- [Cài đặt trên Raspberry Pi (Production)](#cài-đặt-trên-raspberry-pi-production)
+- [Cài đặt trên Raspberry Pi (Production — bare metal)](#cài-đặt-trên-raspberry-pi-production--bare-metal)
 - [Cập nhật hệ thống](#cập-nhật-hệ-thống)
-- [Tài khoản mặc định](#tài-khoản-mặc-định)
+- [Tài khoản admin lần đầu](#tài-khoản-admin-lần-đầu)
 - [Truy cập hệ thống](#truy-cập-hệ-thống)
 - [Cấu hình môi trường](#cấu-hình-môi-trường)
 - [Lệnh quản lý (Production)](#lệnh-quản-lý-production)
@@ -92,7 +93,99 @@ Hệ thống kế toán nội bộ cho doanh nghiệp nhỏ.
 | MariaDB | 10.6 trở lên | `mysql --version` |
 
 > **Windows:** Tải Node.js tại [nodejs.org](https://nodejs.org) (bản LTS). Tải MariaDB tại [mariadb.org/download](https://mariadb.org/download/).  
-> **Raspberry Pi / Linux:** `install.sh` sẽ tự cài MariaDB, không cần làm thủ công.
+> **Raspberry Pi / Linux:** `install.sh` sẽ tự cài MariaDB, không cần làm thủ công.  
+> **Docker:** chỉ cần Docker Engine ≥ 24 + Compose plugin. Không cần cài Node hay MariaDB lên host.
+
+---
+
+## Cài đặt với Docker (khuyên dùng cho Pi/server)
+
+Cách triển khai đơn giản nhất — chạy 1 lệnh, không phải cài Node, MariaDB, hay PM2 lên máy chủ. Phù hợp Raspberry Pi 5 (arm64), VPS Linux x86_64, hoặc bất kỳ máy nào có Docker Engine + Compose plugin. Chi tiết kiến trúc xem [DOCKER.md](DOCKER.md).
+
+### Yêu cầu
+
+- Docker Engine ≥ 24 (`docker --version`)
+- Docker Compose plugin (`docker compose version`)
+- `openssl` và `bash` (Git Bash trên Windows đã có sẵn)
+
+Cài Docker trên RPi5 / Linux:
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+sudo systemctl enable --now docker
+# Logout/login lại để nhóm `docker` có hiệu lực
+```
+
+### Bước 1 — Clone repo
+
+```bash
+git clone <repo-url> ke-toan-noi-bo
+cd ke-toan-noi-bo
+```
+
+### Bước 2 — Khởi tạo & start (1 lệnh)
+
+```bash
+make up
+```
+
+Hoặc nếu không có `make`:
+```bash
+bash scripts/docker-init.sh
+```
+
+Script tự động:
+1. Kiểm tra `docker`, `docker compose`, `openssl` đã có
+2. Nếu `.env` chưa có → sinh ngẫu nhiên `DB_PASSWORD`, `DB_ROOT_PASSWORD`, `JWT_SECRET` bằng `openssl rand -hex` và ghi ra `.env` (chmod 600)
+3. Nếu `.env` đã có → giữ nguyên (idempotent — không bao giờ ghi đè nhầm)
+4. Chạy `docker compose up -d --build`
+
+Lần đầu sẽ build image, mất ~5–15 phút trên RPi5 (chậm), vài chục giây trên máy dev x86_64. Lần sau cache layer rất nhanh.
+
+### Bước 3 — Truy cập & khởi tạo admin qua UI
+
+Mở: `http://<ip-server>:3001`
+
+Lần đầu (DB rỗng), frontend sẽ tự hiển thị trang **"Khởi tạo hệ thống lần đầu"** — điền username + họ tên + mật khẩu (≥12 ký tự, mix chữ hoa/thường/số/đặc biệt) → nhấn Khởi tạo → tự động đăng nhập vào dashboard.
+
+> **KHÔNG** cần đụng `.env`, **KHÔNG** cần SSH vào server, **KHÔNG** cần biết DB credential.
+> Mọi thứ đều qua UI.
+
+### Bước 4 — Vận hành
+
+Sau khi `.env` đã được sinh ở lần đầu, từ giờ về sau bạn có thể dùng trực tiếp `docker compose` hoặc qua các lệnh `make` cho thống nhất:
+
+| Việc | Lệnh `make` | Lệnh `docker compose` |
+|---|---|---|
+| Start | `make up` | `docker compose up -d` |
+| Tắt (giữ data) | `make down` | `docker compose down` |
+| Xem log realtime | `make docker-logs` | `docker compose logs -f app` |
+| Sau `git pull` (rebuild) | `make up` | `docker compose up -d --build` |
+| Vào shell container | — | `docker compose exec app sh` |
+| Vào MariaDB CLI | — | `docker compose exec db mariadb -u root -p` |
+| Reset toàn bộ (XOÁ DATA) | — | `docker compose down -v && rm -rf data/` |
+
+### Cấu trúc volume
+
+```
+ke-toan-noi-bo/
+├── data/
+│   ├── prisma/         # schema, rank-config.json, backup-config.json (bind mount)
+│   └── backups/        # output của auto-backup cron + tải về thủ công
+└── (named volume) dbdata → /var/lib/mysql
+```
+
+Backup đề xuất: rsync `data/backups/*.sql` định kỳ lên S3/NAS/máy khác. Volume `dbdata` của Docker có thể snapshot riêng nếu cần rollback nhanh.
+
+### Lưu ý quan trọng
+
+- **Không cần PM2** trong container — Docker tự `restart: unless-stopped` thay thế
+- **Frontend được serve cùng port 3001** với API — không cần nginx/caddy phụ
+- **Backup/restore qua UI vẫn hoạt động** — runtime image có sẵn `mysqldump`/`mysql` CLI
+- **Container chạy as `node` user** (UID 1000) — không phải root, file ghi vào `data/` dễ chown
+- Nếu đã set `INITIAL_ADMIN_PASSWORD` trong `.env` → backend bootstrap admin trước, trang Khởi tạo bị skip → đi thẳng vào Login (escape hatch cho deploy headless/CI)
+
+Chi tiết troubleshooting Docker: xem [DOCKER.md](DOCKER.md).
 
 ---
 
@@ -192,9 +285,11 @@ Truy cập từ điện thoại: `http://<IP-máy-bạn>:5173`
 
 ---
 
-## Cài đặt trên Raspberry Pi (Production)
+## Cài đặt trên Raspberry Pi (Production — bare metal)
 
-Dùng cho môi trường chạy thật. Backend tự phục vụ cả frontend, chạy nền với PM2.
+> 💡 Cách triển khai dễ nhất hiện nay là [Docker](#cài-đặt-với-docker-khuyên-dùng-cho-piserver). Phần dưới là cách cài trực tiếp lên hệ điều hành (không Docker), giữ lại cho ai đã quen quy trình PM2 cũ.
+
+Backend tự phục vụ cả frontend, chạy nền với PM2.
 
 ### Bước 1 — Cài Node.js 20
 
@@ -280,16 +375,17 @@ make deploy
 
 ---
 
-## Tài khoản mặc định
+## Tài khoản admin lần đầu
 
-Tài khoản được **tự động tạo khi backend khởi động lần đầu** (nếu database chưa có user nào):
+Hệ thống **không còn tài khoản mặc định cứng** (`admin/admin123`). Lần đầu mở UI, nếu DB chưa có user nào, frontend sẽ tự hiển thị trang **"Khởi tạo hệ thống lần đầu"** để bạn đặt:
 
-| Username | Password | Quyền |
-|---|---|---|
-| `admin` | `admin123` | Admin — toàn quyền |
+- Tên đăng nhập (≥3 ký tự, chỉ chữ/số/`. _ -`)
+- Họ tên hiển thị
+- Mật khẩu (≥12 ký tự, có ít nhất 3/4 nhóm: chữ thường / chữ hoa / số / ký tự đặc biệt)
 
-> **Bắt buộc đổi mật khẩu ngay sau lần đăng nhập đầu tiên.**  
-> Vào: **Hồ sơ của tôi → Đổi mật khẩu**
+Sau khi nhấn Khởi tạo → hệ thống tự tạo admin với role `admin`, auto-login vào dashboard. Không cần đụng `.env`, không cần SSH.
+
+> **Escape hatch cho deploy headless** (CI/CD seed admin tự động): set `INITIAL_ADMIN_PASSWORD` trong `.env` (Docker) hoặc `backend/.env` (bare metal). Backend sẽ bootstrap admin theo env var trước khi UI render → trang Khởi tạo bị skip. Sau đó nhớ XOÁ env var và restart.
 
 ---
 
@@ -467,6 +563,16 @@ ke-toan-noi-bo/
 ---
 
 ## Troubleshooting
+
+**Docker — `docker compose up -d` báo `required variable XXX is missing`**  
+`.env` chưa được sinh. Chạy `make up` (hoặc `bash scripts/docker-init.sh`) một lần để init `.env`, sau đó các lần `docker compose up -d` tiếp theo sẽ chạy bình thường.
+
+**Docker — quên mật khẩu admin / cần reset**  
+Cách nhanh nhất giờ là wipe bảng `User` để trigger lại trang Khởi tạo lần đầu:
+```bash
+docker compose exec db mariadb -u root -p$(grep DB_ROOT_PASSWORD .env | cut -d= -f2) -e "DELETE FROM User;" ketoan
+```
+Reload trang web → trang Khởi tạo hiện ra → tạo lại admin với mật khẩu mới. ⚠️ Lệnh trên xoá *toàn bộ* user (cả staff). Nếu muốn chỉ reset password riêng admin: dùng cách Node script ở mục cuối phần troubleshooting này.
 
 **`prisma generate` lỗi EPERM (Windows)**
 ```bash

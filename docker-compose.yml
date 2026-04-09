@@ -1,0 +1,80 @@
+# Docker Compose cho hệ thống kế toán nội bộ.
+#
+# 2 service:
+#   - db   : MariaDB 11.4 (LTS), data persistent qua named volume `dbdata`
+#   - app  : Node + frontend build, depends_on db (chờ healthy mới start)
+#
+# Cách chạy nhanh trên Raspberry Pi 5 (hoặc Linux server bất kỳ):
+#   1) cp .env.docker.example .env
+#   2) Sửa .env: DB password, JWT_SECRET (openssl rand -hex 64), INITIAL_ADMIN_PASSWORD
+#   3) docker compose up -d --build
+#   4) Mở http://<ip-server>:3001
+#
+# Backup database (SQL dump) lưu tại ./data/backups (bind mount).
+
+services:
+  db:
+    image: mariadb:11.4
+    container_name: ketoan-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD chưa được set trong .env}
+      MARIADB_DATABASE:      ${DB_NAME:?DB_NAME chưa được set trong .env}
+      MARIADB_USER:          ${DB_USER:?DB_USER chưa được set trong .env}
+      MARIADB_PASSWORD:      ${DB_PASSWORD:?DB_PASSWORD chưa được set trong .env}
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - dbdata:/var/lib/mysql
+    healthcheck:
+      # mariadb image >= 10.10 cung cấp sẵn healthcheck.sh
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # KHÔNG expose port 3306 ra host — chỉ truy cập qua bridge network nội bộ.
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ketoan-app:latest
+    container_name: ketoan-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Connection string nội bộ — host = service name `db`
+      DATABASE_URL: "mysql://${DB_USER}:${DB_PASSWORD}@db:3306/${DB_NAME}"
+      JWT_SECRET:             ${JWT_SECRET:?JWT_SECRET chưa được set trong .env (≥32 ký tự)}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      ALLOWED_ORIGINS:        ${ALLOWED_ORIGINS:-}
+      ENABLE_HSTS:            ${ENABLE_HSTS:-0}
+      BIND_HOST: 0.0.0.0
+      PORT: 3001
+      NODE_ENV: production
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "${APP_PORT:-3001}:3001"
+    volumes:
+      # Prisma dir — chứa schema, migrations (sync từ image mỗi lần start)
+      # và rank-config.json / backup-config.json (do app tự ghi, persistent).
+      - ./data/prisma:/app/backend/prisma
+      # Output của auto-backup cron + tải về thủ công.
+      - ./data/backups:/app/backend/backups
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  dbdata:
+    driver: local

@@ -1,0 +1,40 @@
+**/node_modules
+**/dist
+**/build
+**/coverage
+**/.cache
+
+# Env / secrets — không bao giờ copy vào image
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Git / IDE
+.git
+.gitignore
+.vscode
+.idea
+
+# Logs
+**/*.log
+
+# Test artefacts
+**/__tests__
+**/*.test.ts
+**/*.spec.ts
+
+# Data từ host (sẽ được mount lại bằng volume)
+data/
+backend/backups/
+backend/prisma/dev.db*
+backend/prisma/*.json
+
+# Tài liệu / sample / artefact không cần build
+*.md
+sample-invoices/
+logo.png
+ecosystem.config.js
+deploy.sh
+install.sh
+install.bat
+Makefile

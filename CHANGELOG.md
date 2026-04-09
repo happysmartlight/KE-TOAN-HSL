@@ -2,7 +2,47 @@
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-04-09
+
 ### Tính năng mới
+
+#### Docker — Stack triển khai 1 lệnh
+- **`Dockerfile`** multi-stage (`node:20-slim`): build frontend (Vite) → build backend (TS + Prisma generate) → runtime tối thiểu với `mariadb-client` (cho `mysqldump`/`mysql` CLI mà endpoint backup/restore gọi tới) + `tini` PID 1 để graceful shutdown.
+- **`docker-compose.yml`** 2 service: `app` (Node + frontend build, port 3001) + `db` (MariaDB 11.4, không expose port 3306 ra host). Healthcheck cả hai, `depends_on: condition: service_healthy`.
+- **`docker/entrypoint.sh`**: sync schema từ image template → bind mount, fallback `prisma db push --skip-generate` nếu chưa có thư mục `migrations/` (khớp workflow hiện tại của project), KHÔNG truyền `--accept-data-loss` để fail loud nếu có destructive change.
+- **`scripts/docker-init.sh`**: idempotent — sinh `.env` ngẫu nhiên (`openssl rand -hex 24/64`) cho `DB_PASSWORD`, `DB_ROOT_PASSWORD`, `JWT_SECRET` lần đầu, sau đó tự `docker compose up -d --build`. Chạy `make up` hoặc `bash scripts/docker-init.sh` là xong.
+- **Volume**:
+  - `dbdata` (named) → `/var/lib/mysql`
+  - `./data/prisma` (bind) → schema + `rank-config.json` + `backup-config.json`
+  - `./data/backups` (bind) → output auto-backup
+- **Container chạy as `node` user (UID 1000)** — không root, file ghi vào `data/` dễ chown
+- **Bỏ PM2 trong container** — Docker `restart: unless-stopped` thay thế. `ecosystem.config.js` vẫn giữ cho ai chạy bare-metal.
+- **Makefile**: thêm targets `up`, `down`, `docker-init`, `docker-logs`
+- **Tài liệu mới**: [DOCKER.md](DOCKER.md) (kiến trúc, vận hành, troubleshooting), README.md có section "Cài đặt với Docker (khuyên dùng cho Pi/server)"
+
+#### Auth — First-run Setup UI (Wordpress-style)
+Thay vì bắt buộc set `INITIAL_ADMIN_PASSWORD` trong `.env` trước khi khởi động, lần đầu mở UI khi DB rỗng giờ tự hiển thị trang **"Khởi tạo hệ thống lần đầu"** để admin tự đặt username + mật khẩu qua giao diện.
+
+- **Backend**:
+  - `GET /api/auth/setup-status` (public) — trả `{ needsSetup: boolean }` dựa trên `User.count() === 0`
+  - `POST /api/auth/setup` (public, rate-limited) — tạo admin đầu tiên + auto-login (trả token). Wrap trong `prisma.$transaction` + recheck `count===0` để chống race condition. Bcrypt hash *ngoài* transaction để không giữ DB lock 250ms. Trả 409 nếu đã có user (chống re-setup), 400 cho validation.
+  - `seedAdminIfNeeded` trong `index.ts` giờ silent nếu env var không set — vẫn hoạt động làm escape hatch cho deploy headless (Docker CI/CD).
+- **Frontend**:
+  - `pages/FirstRunSetup.tsx` — form username + họ tên + password + confirm với password policy checklist real-time (≥12 ký tự, 3/4 nhóm, khớp confirm). Submit disabled tới khi tất cả ✓.
+  - `AuthContext` thêm state `needsSetup` + method `setupAdmin()`. Lúc khởi động gọi `/auth/setup-status` trước khi restore session.
+  - `App.tsx`: branch mới `if (needsSetup) return <FirstRunSetup />` đặt trước branch login.
+- **Bảo mật**: TOCTOU bảo vệ qua transaction recheck, brute force chặn bởi `authLimiter` (10 req/15 phút), password policy share chung với login/update, username sanitize `[a-zA-Z0-9._-]{3,}`, audit log ghi `action: 'setup'` khi thành công.
+
+### Cải tiến
+
+#### README & docs
+- README.md: thêm section Docker (khuyên dùng), đổi heading bare-metal thành "Production — bare metal" với callout 💡, cập nhật mục "Tài khoản admin lần đầu" (bỏ `admin/admin123` mặc định cứng), thêm 2 mục troubleshooting Docker.
+- `.env.docker.example` + `backend/.env.example`: đánh dấu `INITIAL_ADMIN_PASSWORD` là tuỳ chọn, chỉ cần khi deploy headless.
+- `.gitignore`: `.env` đã được gitignore từ trước → secret không lọt git.
+
+### Tính năng mới (gộp từ Unreleased trước đó)
 
 #### Hóa đơn — Tab "Lịch sử thu tiền" + Hoàn tác phiếu thu
 - Trang `/invoices` thêm tab thứ 2: 💰 Lịch sử thu tiền (kèm count badge)

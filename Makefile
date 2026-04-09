@@ -1,4 +1,4 @@
-.PHONY: install deploy logs status restart stop
+.PHONY: install deploy logs status restart stop up down docker-logs docker-init
 
 # Cài đặt lần đầu (sau khi clone)
 install:
@@ -23,3 +23,21 @@ restart:
 # Dừng service
 stop:
 	pm2 stop ke-toan-backend
+
+# ── Docker stack ──────────────────────────────────────────
+# Lần đầu: tự sinh .env (random secret) rồi build & up.
+# Lần sau: idempotent — .env có sẵn thì giữ nguyên.
+up:
+	bash scripts/docker-init.sh
+
+# Chỉ sinh .env, không up (dùng khi muốn review trước)
+docker-init:
+	bash scripts/docker-init.sh --no-up
+
+# Tắt stack (KHÔNG xoá volume → data còn nguyên)
+down:
+	docker compose down
+
+# Logs realtime của container app
+docker-logs:
+	docker compose logs -f app
